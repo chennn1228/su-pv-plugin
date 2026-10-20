@@ -92,7 +92,7 @@ module SuPvPredictionTool
       context = data.fetch('context')
       raise '预测对象已改变，请重新计算。' unless context.fetch('target_id') == @target_id && context.fetch('count') == @snapshot['count'] && data.fetch('settings') == @snapshot['settings']
       values, branch = data.fetch('values'), context.fetch('branch')
-      raise '预测分支无效。' unless ['baseline','aggregate','per_panel'].include?(branch)
+      raise '预测分支无效。' unless ['baseline','shade'].include?(branch)
       SuPvGenerationExport.validate_values(values)
       @snapshot['prediction'].fetch(:values).each_with_index do |original,index|
         tolerance = [1e-6,original.abs*1e-9].max

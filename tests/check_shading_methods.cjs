@@ -5,6 +5,7 @@ checks();
 for(const missing of [false,true]){
  const plan=makePlan(6,{missing}),raw=Array.from({length:8760},(_,i)=>Math.max(0,Math.sin((i%24-6)*Math.PI/12))*630*plan.count);
  const a=S.annual(plan,raw,()=>{},S.site,'per_panel'),b=S.annual(plan,raw,()=>{},S.site,'aggregate');
+ assert.equal(S.annual(plan,raw).method,'aggregate');
  assert(a.method==='per_panel'&&b.method==='aggregate');
  for(let i=0;i<8760;i++){
   assert(Math.abs(a.factors[i]-b.factors[i])<1e-8,'Hourly factors diverged');

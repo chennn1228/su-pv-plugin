@@ -15,7 +15,7 @@ const {chromium}=runtime('playwright');
    const data={settings:{azimuth:180,tilt:30,model_id:'TSM-NE19R',...(array?{gap_x_mm:100,gap_y_mm:500}:{})},
     spec:{id:'TSM-NE19R',model:'TSM-NE19R',manufacturer:'天合光能',power_w:630,width_mm:1134,length_mm:2382,thickness_mm:30},
     values:Array.from({length:8760},(_,i)=>i%24),annual_kwh:100,peak_wh:23,
-    ...(array?{export_context:{kind:'array',count:12,target_id:3,branch:'aggregate'}}:{})};
+    ...(array?{export_context:{kind:'array',count:12,target_id:3,branch:'shade'}}:{})};
    data.catalog=[data.spec];
    await page.evaluate(d=>PV.receive(d),data);
    if(array)await page.evaluate(()=>{document.querySelector('.array-power').hidden=false;});
@@ -23,7 +23,7 @@ const {chromium}=runtime('playwright');
    await page.locator('#exportCsv').click();
    const payload=await page.evaluate(()=>window.exports[0]);
    assert.deepEqual(payload.values,data.values);assert.deepEqual(payload.settings,data.settings);
-   assert.equal(payload.context.branch,array?'aggregate':'panel');
+   assert.equal(payload.context.branch,array?'shade':'panel');
    assert.equal(await page.locator('#exportCsv').isDisabled(),true);
    await page.evaluate(()=>PV.exported({cancelled:true}));
    assert.equal(await page.locator('#exportCsv').isEnabled(),true);

@@ -29,7 +29,8 @@ const fixture=JSON.parse(fs.readFileSync(process.env.PV_PREDICTION_FIXTURE||'.pr
   await page.waitForFunction(()=>document.querySelector('#shadeStatus').classList.contains('annual-loss'));
   await page.locator('#exportCsv').click();
   const corrected=await page.evaluate(()=>window.exports.at(-1));
-  assert.equal(corrected.context.branch,'aggregate');assert.equal(corrected.values.length,8760);
+  assert.equal(corrected.context.branch,'shade');assert.equal(corrected.values.length,8760);
+  assert.equal(await page.locator('#shadingMethod,#shadingMethodControl').count(),0);
   assert(corrected.values.every((v,i)=>v<=original.values[i]+1e-6));
   await page.evaluate(()=>PV.exported({cancelled:true}));
   await page.locator('#forecastReselect').click();

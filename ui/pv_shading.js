@@ -105,7 +105,9 @@ function aggregateFactor(g,sun){
  function atHour(g,index,location=site,details=false){
   const sun=sunAtHour(index,location);return {...forSun(g,sun.vector,details),sun};
  }
- function annual(plan,baseline,progress=()=>{},location=site,method='per_panel'){
+ // Current same-model arrays use the aggregate union. Per-panel output stays internal
+ // for shadow inspection and a future mixed-model evaluator with individual weights.
+ function annual(plan,baseline,progress=()=>{},location=site,method='aggregate'){
   if(!['per_panel','aggregate'].includes(method))throw Error('未知遮挡算法');
   location=validateLocation(location);
   if(!Array.isArray(baseline)||baseline.length!==8760||baseline.some(v=>!Number.isFinite(v)||v<0))throw Error('全年原始出力不完整');

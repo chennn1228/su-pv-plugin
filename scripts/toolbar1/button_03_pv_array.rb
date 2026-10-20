@@ -216,7 +216,7 @@ module SuPvArrayTool1
       plan = make_plan(params)
       raise '阵列数量已改变，请重新预览。' unless context.fetch('count') == plan['count']
       branch = context.fetch('branch')
-      raise '出力分支不正确。' unless ['baseline', 'aggregate', 'per_panel'].include?(branch)
+      raise '出力分支不正确。' unless ['baseline', 'shade'].include?(branch)
       values = data.fetch('values')
       SuPvGenerationExport.validate_values(values)
       single = SuPvPanelTool1.energy_for(@spec, params['azimuth'], params['tilt'])

@@ -17,8 +17,8 @@ check(rows[60][0] == '03-01' && rows[-1][0] == '12-31', 'Calendar boundaries')
 check(rows.drop(1).flat_map { |row| row.drop(1).map(&:to_f) } == values, 'Lost or reordered energy')
 spec = {id: 'TSM-NE19R', power_w: 630}
 settings = {'azimuth'=>180, 'tilt'=>30, 'gap_x_mm'=>100, 'gap_y_mm'=>500}
-options = {values: values, spec: spec, settings: settings, count: 12, branch: 'aggregate'}
-check(SuPvGenerationExport.filename(spec, settings, 12, 'aggregate').include?('_n12_g10-50_aggregate'), 'Array scheme filename')
+options = {values: values, spec: spec, settings: settings, count: 12, branch: 'shade'}
+check(SuPvGenerationExport.filename(spec, settings, 12, 'shade').include?('_n12_g10-50_shade'), 'Array scheme filename')
 check(SuPvGenerationExport.save(**options)[:cancelled], 'Cancel must not write')
 destination = File.expand_path('../output/.export_check.csv', __dir__)
 begin

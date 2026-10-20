@@ -14,7 +14,7 @@
 .shade-controls{margin:0 0 14px;flex-shrink:0}.shade-branch{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.shade-branch select{min-width:145px}.shade-branch span{font-size:var(--label-font);color:var(--blue)}
 
 .shade-branch{justify-content:space-between}.shade-branch #shadeStatus.annual-loss{display:flex;align-items:center;gap:14px;background:#fff4e8;border:1px solid #efc998;border-radius:8px;padding:9px 18px;color:#a45f14}.annual-loss small{font-size:var(--control-font);font-weight:600}.annual-loss strong{font-size:clamp(28px,3vh,44px);line-height:1.1;font-weight:700}.annual-loss strong span{font-size:17px;color:inherit;margin-left:3px}
-#shadingMethodControl{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:var(--label-font)}#shadingMethodControl select{min-width:0}.shade-branch #shadeStatus:empty{display:none}
+.shade-branch #shadeStatus:empty{display:none}
 
 .array-sidebar{gap:clamp(10px,1.2vh,22px)}.array-sidebar .product-card svg{height:clamp(64px,9vh,160px)}
 .array-target-card{gap:10px}.array-target-card .array-target{gap:9px}.array-target-card .array-target svg{width:38px;height:38px}.array-target-card .secondary{padding:5px 8px;background:#fafcfd}

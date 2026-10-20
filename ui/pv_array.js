@@ -1,7 +1,7 @@
 'use strict';
 (function(){
  const el=id=>document.getElementById(id);
- const state={data:null,request:0,dirty:true,building:false,angleDrag:false,timer:null,worker:null,shaded:null,geometry:null,query:null,shadedByMethod:{}};
+ const state={data:null,request:0,dirty:true,building:false,angleDrag:false,timer:null,worker:null,shaded:null,geometry:null,query:null};
  const controls=window.PVPanelControls.create({onModelChange(){state.angleDrag=false;change();},onInput(){state.angleDrag=true;change();},onCommit(){state.angleDrag=false;change();}});
  function params(){return {target_id:state.data&&state.data.target_id,request_id:state.request,model_id:el('panelModel').value,azimuth:Number(el('azimuth').value),tilt:Number(el('tilt').value),gap_x_mm:Number(el('gapX').value)*10,gap_y_mm:Number(el('gapY').value)*10};}
  function validGaps(){return ['gapX','gapY'].every(id=>el(id).value.trim()!==''&&Number.isInteger(Number(el(id).value))&&Number(el(id).value)>=0&&Number(el(id).value)<=Number(el(id).max));}
@@ -25,7 +25,6 @@
  function syncLabView(){
   if(!lab)return;
   const power=el('arrayLayout').hidden,shade=el('predictionBranch').value==='shade',active=power&&shade;
-  el('shadingMethodControl').hidden=!shade;
   if(active&&lab.step<4&&(el('day').disabled||el('hour').disabled||el('period').value!=='daily')){document.querySelector('[data-view="surface"]').click();el('period').value='daily';el('period').dispatchEvent(new Event('change'));}
   lab.setActive(active);el('shadeControls').hidden=!power;
   document.querySelector('.array-power').hidden=!power||(shade&&(lab.step!==4||!state.shaded));
@@ -37,7 +36,7 @@
   else node.innerHTML='<small>全年减少</small><strong>'+loss.toFixed(2)+'<span>%</span></strong>';
  }
  function invalidateShading(){
-  stopWorker();state.shaded=null;state.shadedByMethod={};state.geometry=null;
+  stopWorker();state.shaded=null;state.geometry=null;
   setShadeStatus('');el('shadeRetry').hidden=true;if(lab)lab.resetResult();
  }
  function stopWorker(){
@@ -49,7 +48,7 @@
   lab.calculation('计算失败：'+message);window.PV.clear('互遮挡计算未完成，可切回原始预测');syncLabView();
  }
  function receiveForecast(prediction){
-  window.PV.receive({...prediction,export_context:{kind:'array',count:state.data.count,target_id:state.data.target_id,branch:prediction.method||'baseline'}});
+  window.PV.receive({...prediction,export_context:{kind:'array',count:state.data.count,target_id:state.data.target_id,branch:prediction.method?'shade':'baseline'}});
  }
  function showForecast(compute=false){
   if(state.data&&state.data.layout_only){window.PV.clear();return;}
@@ -64,26 +63,21 @@
   if(state.worker)return;
   state.shaded=null;lab.calculation('计算中 0%');window.PV.clear('正在计算互遮挡…');setShadeStatus('计算中 0%');syncLabView();
   try{
-   const data=state.data,method=el('shadingMethod').value;
+   const data=state.data;
    state.workerUrl=URL.createObjectURL(new Blob([window.SuPvShading.workerSource()],{type:'text/javascript'}));
    const worker=new Worker(state.workerUrl);state.worker=worker;
    worker.onmessage=event=>{
-    if(state.worker!==worker||state.data!==data||state.dirty||el('shadingMethod').value!==method)return;
+    if(state.worker!==worker||state.data!==data||state.dirty)return;
     const msg=event.data;
     if(msg.type==='progress'){setShadeStatus('计算中 '+msg.percent+'%');lab.calculation('计算中 '+msg.percent+'%');}
-    else if(msg.type==='result'){stopWorker();state.shaded=msg.result;state.shadedByMethod[method]=msg.result;showForecast();}
+    else if(msg.type==='result'){stopWorker();state.shaded=msg.result;showForecast();}
     else if(msg.type==='error')shadeFailed(msg.message);
    };
    worker.onerror=event=>{if(state.worker!==worker)return;event.preventDefault();shadeFailed(event.message||'计算线程不可用');};
-   worker.postMessage({plan:data,baseline:data.prediction.values,location:lab.location,method});
+   worker.postMessage({plan:data,baseline:data.prediction.values,location:lab.location});
   }catch(error){shadeFailed(error.message);}
  }
  el('predictionBranch').addEventListener('change',()=>showForecast());
- el('shadingMethod').addEventListener('change',()=>{
-  stopWorker();state.shaded=state.shadedByMethod[el('shadingMethod').value]||null;
-  setShadeStatus('');lab.resetResult();
-  showForecast();
- });
  el('shadeRetry').addEventListener('click',()=>showForecast(true));
  window.addEventListener('unload',stopWorker);
  function prepare(canvas){
