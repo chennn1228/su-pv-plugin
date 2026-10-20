@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>变电站光伏 · 阵列</title><link rel="stylesheet" href="pv_panel.css"><link rel="stylesheet" href="pv_array.css"><link rel="stylesheet" href="pv_shading_lab.css"><script src="pv_panel_controls.js" defer></script><script src="pv_surface.js" defer></script><script src="pv_shading.js" defer></script><script src="pv_shading_lab.js" defer></script><script src="pv_array.js" defer></script></head>
+<body data-pv-mode="array">
+<main>
+<aside class="array-sidebar">
+<div class="product-card parameter-module" data-pv-product></div>
+<div class="array-target-card parameter-module" data-layout-only><div class="array-target"><svg id="targetPreview" viewBox="0 0 84 64" role="img" aria-label="安装面示意"></svg><div><strong id="targetName">安装面</strong><span id="targetSize">—</span></div></div><button id="repick" class="secondary">重新选择</button></div>
+<section class="angle-module parameter-module" data-pv-angles></section>
+<section class="gap-section parameter-module" data-layout-only><h2 class="section-label">阵列间距</h2>
+<div class="gap-control"><label for="gapX">横向净距 <span><input id="gapX" type="number" min="0" max="0" step="1" value="0" disabled aria-label="横向净距厘米"> cm</span></label><input id="gapXRange" type="range" min="0" max="0" step="1" value="0" disabled aria-label="横向净距滑条" title="滑条每格5厘米；数值框可手输1厘米"><div id="gapXRuler" class="gap-ruler" aria-hidden="true"></div><div id="gapXBounds" class="gap-bounds"></div></div>
+<div class="gap-control"><label for="gapY">纵向净距 <span><input id="gapY" type="number" min="0" max="0" step="1" value="0" disabled aria-label="纵向净距厘米"> cm</span></label><input id="gapYRange" type="range" min="0" max="0" step="1" value="0" disabled aria-label="纵向净距滑条" title="滑条每格5厘米；数值框可手输1厘米"><div id="gapYRuler" class="gap-ruler" aria-hidden="true"></div><div id="gapYBounds" class="gap-bounds"></div></div>
+</section>
+<div id="arrayForecastQuery" hidden>      <div class="metrics parameter-module"><div><small>全年电量</small><strong id="annual">—</strong><span>kWh</span></div><div><small>小时平均峰值</small><strong id="peak">—</strong><span>W</span></div></div>
+      <div class="time-query parameter-module"><h2 class="section-label">时间查询</h2>
+      <label for="month">月份 <b id="monthValue">6月</b></label><input id="month" type="range" min="1" max="12" step="1" value="6" aria-label="月份">
+      <div id="dayControl"><label for="day">日期 <b id="dayValue">21日</b></label><input id="day" type="range" min="1" max="30" step="1" value="21" aria-label="日期"></div>
+      <label for="hour">时段 <b id="hourValue">12:00—13:00</b></label><input id="hour" type="range" min="0" max="23" step="1" value="12" aria-label="小时区间">
+      <div class="power-card"><div id="pointDate" class="point-date">—</div><div class="point-value"><strong id="pointPower">—</strong><span id="pointUnit">W</span></div></div></div>
+      <div id="error" role="alert" hidden></div>
+</div>
+<div class="array-submit" data-layout-only><button id="build" class="primary" disabled>生成阵列</button><div id="arrayStatus" role="status"></div><div id="arrayError" role="alert" hidden></div></div>
+</aside>
+<section class="chart-section array-chart">
+<nav class="view-tabs array-mode-tabs" aria-label="阵列视图"><button data-array-view="layout" class="active">阵列排布</button><button data-array-view="power">预测出力</button></nav>
+<div class="forecast-header"><div id="forecastCount" class="forecast-count" hidden></div><button id="forecastReselect" class="secondary forecast-reselect" hidden>重新选择</button></div>
+<div id="shadeControls" class="shade-controls" hidden>
+ <div class="shade-branch"><select id="predictionBranch" aria-label="预测分支"><option value="baseline">原始预测</option><option value="shade">互遮挡实验</option></select><label id="shadingMethodControl" hidden>算法<select id="shadingMethod" aria-label="遮挡算法"><option value="aggregate">整体投影并集（快速）</option><option value="per_panel">逐板投影</option></select></label><span id="shadeStatus" role="status"></span><button id="shadeRetry" class="secondary" hidden>重试</button></div>
+
+</div>
+<div id="shadingLab" hidden></div>
+<div id="arrayLayout">
+<div class="chart-metrics"><div><small>组件数量</small><div><strong id="panelCount">—</strong><span>块</span></div></div><div><small>装机容量</small><div><strong id="capacity">—</strong><span>kWp</span></div></div></div>
+<div class="array-visuals">
+<div class="array-preview"><div class="array-preview-heading"><span>安装面正投影</span><span id="gridSize"></span></div><canvas id="layoutCanvas" aria-label="沿安装面法线观察的阵列正投影"></canvas></div>
+<div class="array-preview"><div class="array-preview-heading"><span>正等轴测单元</span><span id="unitSize"></span></div><canvas id="isoCanvas" aria-label="正等轴测阵列单元、投影、净距与绝对角度"></canvas></div>
+</div>
+</div>
+<div class="array-power" hidden>      <div id="missingData" role="status" hidden>暂无出力数据</div>
+      <div class="chart-toolbar"><nav class="view-tabs" role="tablist" aria-label="出力分析"><button data-view="surface" class="active" role="tab" aria-selected="true">三维分布</button><button data-view="day" role="tab" aria-selected="false">逐时曲线</button><button data-view="month" role="tab" aria-selected="false">月度电量</button></nav><button id="exportCsv" class="secondary" disabled>导出全年 CSV</button></div>
+      <div id="surfaceControls" class="surface-controls"><select id="period" aria-label="三维统计周期"><option value="daily">全年逐日逐时</option><option value="monthly">逐月平均逐时</option></select><span id="surfaceCaption">365天 × 24小时</span><button id="resetView" class="secondary">重置视角</button></div>
+      <div id="surfaceArea" class="visual-area"><div id="plot"><canvas id="surface" aria-label="三维热力曲面"></canvas><canvas id="labels"></canvas><div id="empty">读取对应角度的8760小时数据后显示曲面</div></div></div>
+      <div id="profileControls" class="surface-controls" hidden><select id="profilePeriod" aria-label="逐时曲线统计周期"><option value="daily">单日逐时</option><option value="monthly">月平均逐时</option></select></div><div id="lineMetrics" class="chart-metrics" hidden><div><small id="energyLabel">日电量</small><div><strong id="chartEnergy">—</strong><span>kWh</span></div></div><div><small id="peakLabel">小时峰值</small><div><strong id="chartPeak">—</strong><span id="chartPeakUnit">W</span></div></div></div><div id="lineArea" class="visual-area line-area" hidden><div id="chartSummary"></div><div id="linePlot"><canvas id="lineChart" aria-label="二维出力图"></canvas></div></div>
+      <div id="legendArea"><div class="legend"><span>0 W</span><div></div><span id="legendMax">— W</span></div></div>
+
+</div>
+</section>
+</main>
+</body></html>

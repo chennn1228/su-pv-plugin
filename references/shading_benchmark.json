@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-20",
+  "runtime": "v24.19.0",
+  "validation": {
+    "checked": 325,
+    "max_factor_error": 1.7763568394002505e-15
+  },
+  "benchmark": [
+    {
+      "panels": 36,
+      "missing": false,
+      "directions": 15,
+      "per_panel_ms": 1.344,
+      "aggregate_union_ms": 0.91,
+      "speedup": 1.476,
+      "max_factor_error": 5.551115123125783e-16
+    },
+    {
+      "panels": 35,
+      "missing": true,
+      "directions": 15,
+      "per_panel_ms": 1.953,
+      "aggregate_union_ms": 1.013,
+      "speedup": 1.929,
+      "max_factor_error": 6.661338147750939e-16
+    },
+    {
+      "panels": 400,
+      "missing": false,
+      "directions": 15,
+      "per_panel_ms": 16.98,
+      "aggregate_union_ms": 6.058,
+      "speedup": 2.803,
+      "max_factor_error": 5.10702591327572e-15
+    },
+    {
+      "panels": 388,
+      "missing": true,
+      "directions": 15,
+      "per_panel_ms": 20.281,
+      "aggregate_union_ms": 6.989,
+      "speedup": 2.902,
+      "max_factor_error": 4.440892098500626e-15
+    },
+    {
+      "panels": 2500,
+      "missing": false,
+      "directions": 15,
+      "per_panel_ms": 90.812,
+      "aggregate_union_ms": 30.366,
+      "speedup": 2.991,
+      "max_factor_error": 3.452793606584237e-14
+    },
+    {
+      "panels": 2430,
+      "missing": true,
+      "directions": 15,
+      "per_panel_ms": 84.629,
+      "aggregate_union_ms": 31.623,
+      "speedup": 2.676,
+      "max_factor_error": 3.8413716652030416e-14
+    }
+  ],
+  "production_changed": false
+}

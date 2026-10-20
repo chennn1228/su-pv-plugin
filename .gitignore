@@ -1,0 +1,15 @@
+# Original simulation workbooks are local inputs; bundled lookup CSVs are tracked.
+/data/PV output/
+/output/
+*.skb
+*.bak
+*.tmp
+~$*
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+.DS_Store
+Thumbs.db
+# Downloaded standards and figures stay local.
+/references/gb50797_2024/

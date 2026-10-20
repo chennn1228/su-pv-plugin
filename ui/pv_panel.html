@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>变电站光伏 · 组件与出力</title>
+  <link rel="stylesheet" href="pv_panel.css">
+  <script src="pv_panel_controls.js" defer></script>
+  <script src="pv_surface.js" defer></script>
+</head>
+<body>
+  <main>
+    <aside>
+      <div class="product-card parameter-module" data-pv-product></div>
+      <section class="angle-module parameter-module" data-pv-angles></section>
+      <div class="panel-actions"><button id="place" class="primary" disabled>放置光伏板</button><p id="panelContext" class="context" hidden></p></div>
+      <div class="metrics parameter-module"><div><small>全年电量</small><strong id="annual">—</strong><span>kWh / 块</span></div><div><small>小时平均峰值</small><strong id="peak">—</strong><span>W</span></div></div>
+      <div class="time-query parameter-module"><h2 class="section-label">时间查询</h2>
+      <label for="month">月份 <b id="monthValue">6月</b></label><input id="month" type="range" min="1" max="12" step="1" value="6" aria-label="月份">
+      <div id="dayControl"><label for="day">日期 <b id="dayValue">21日</b></label><input id="day" type="range" min="1" max="30" step="1" value="21" aria-label="日期"></div>
+      <label for="hour">时段 <b id="hourValue">12:00—13:00</b></label><input id="hour" type="range" min="0" max="23" step="1" value="12" aria-label="小时区间">
+      <div class="power-card"><div id="pointDate" class="point-date">—</div><div class="point-value"><strong id="pointPower">—</strong><span id="pointUnit">W</span></div></div></div>
+      <div id="error" role="alert" hidden></div>
+    </aside>
+    <section class="chart-section">
+      <div id="missingData" role="status" hidden>暂无出力数据</div>
+      <div class="chart-toolbar"><nav class="view-tabs" role="tablist" aria-label="出力分析"><button data-view="surface" class="active" role="tab" aria-selected="true">三维分布</button><button data-view="day" role="tab" aria-selected="false">逐时曲线</button><button data-view="month" role="tab" aria-selected="false">月度电量</button></nav><button id="exportCsv" class="secondary" disabled>导出全年 CSV</button></div>
+      <div id="surfaceControls" class="surface-controls"><select id="period" aria-label="三维统计周期"><option value="daily">全年逐日逐时</option><option value="monthly">逐月平均逐时</option></select><span id="surfaceCaption">365天 × 24小时</span><button id="resetView" class="secondary">重置视角</button></div>
+      <div id="surfaceArea" class="visual-area"><div id="plot"><canvas id="surface" aria-label="三维热力曲面"></canvas><canvas id="labels"></canvas><div id="empty">读取对应角度的8760小时数据后显示曲面</div></div></div>
+      <div id="profileControls" class="surface-controls" hidden><select id="profilePeriod" aria-label="逐时曲线统计周期"><option value="daily">单日逐时</option><option value="monthly">月平均逐时</option></select></div><div id="lineMetrics" class="chart-metrics" hidden><div><small id="energyLabel">日电量</small><div><strong id="chartEnergy">—</strong><span>kWh</span></div></div><div><small id="peakLabel">小时峰值</small><div><strong id="chartPeak">—</strong><span id="chartPeakUnit">W</span></div></div></div><div id="lineArea" class="visual-area line-area" hidden><div id="chartSummary"></div><div id="linePlot"><canvas id="lineChart" aria-label="二维出力图"></canvas></div></div>
+      <div id="legendArea"><div class="legend"><span>0 W</span><div></div><span id="legendMax">— W</span></div></div>
+
+    </section>
+  </main>
+</body>
+</html>

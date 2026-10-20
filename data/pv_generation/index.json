@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "unit": "Wh",
+  "calendar": "non_leap",
+  "hourly_intervals": 8760,
+  "monthly_hourly_intervals": 288,
+  "models": {
+    "LR7-60HVDDF 560M": {
+      "model_id": "LR7-60HVDDF 560M",
+      "manufacturer": "隆基",
+      "power_w": 560.0,
+      "dimensions_mm": [
+        1990.0,
+        1134.0,
+        30.0
+      ],
+      "source_dir": "data/PV output/LR7-60HVDDF_560M_560 W",
+      "hourly": "LR7-60HVDDF_560M_560W/hourly.csv",
+      "monthly_hourly": "LR7-60HVDDF_560M_560W/monthly_hourly.csv",
+      "angle_rows": 1147,
+      "hourly_columns": 8762,
+      "monthly_hourly_columns": 290,
+      "hourly_sha256": "ad0335dee4cdfd32ba537fff6d5787698ddd19da98c4fbefcdda586ef26113c7",
+      "monthly_hourly_sha256": "9b21d47984be63e45af7378957ac184985cdb41d2700cee5631e836eb0018cf0",
+      "max_month_error_wh": 4.3655745685100555e-11,
+      "max_annual_error_wh": 1.0477378964424133e-09
+    },
+    "TSM-NE19R": {
+      "model_id": "TSM-NE19R",
+      "manufacturer": "天合光能",
+      "power_w": 630.0,
+      "dimensions_mm": [
+        2382.0,
+        1134.0,
+        30.0
+      ],
+      "source_dir": "data/PV output/TSM-NE19R_630 W",
+      "hourly": "TSM-NE19R_630W/hourly.csv",
+      "monthly_hourly": "TSM-NE19R_630W/monthly_hourly.csv",
+      "angle_rows": 1147,
+      "hourly_columns": 8762,
+      "monthly_hourly_columns": 290,
+      "hourly_sha256": "2d3a7aaaea96017f0bf2c26fb518a8a6e97b3650b2af8af1e984419d1772b719",
+      "monthly_hourly_sha256": "4a7b851ea10f3cc4e6e57b830a2f50a2da4ee071b568a4955f711276cdc94bfc",
+      "max_month_error_wh": 4.3655745685100555e-11,
+      "max_annual_error_wh": 9.313225746154785e-10
+    },
+    "S6-505": {
+      "model_id": "S6-505",
+      "manufacturer": "龙焱",
+      "power_w": 505.0,
+      "dimensions_mm": [
+        2300.0,
+        1215.0,
+        5.6
+      ],
+      "source_dir": "data/PV output/S6-505_505 W",
+      "hourly": "S6-505_505W/hourly.csv",
+      "monthly_hourly": "S6-505_505W/monthly_hourly.csv",
+      "angle_rows": 1147,
+      "hourly_columns": 8762,
+      "monthly_hourly_columns": 290,
+      "hourly_sha256": "d437898956b5aa1e16c05e1104cdf96a38f466eaf229971b6c289a2ac54afd88",
+      "monthly_hourly_sha256": "76de299116bf6aaa8cd0fbb865a7486de9939d0d3b461accc972e309f5f2efbd",
+      "max_month_error_wh": 4.3655745685100555e-11,
+      "max_annual_error_wh": 9.313225746154785e-10
+    },
+    "XXGD-S-480": {
+      "model_id": "XXGD-S-480",
+      "manufacturer": "协鑫",
+      "power_w": 480.0,
+      "dimensions_mm": [
+        2405.0,
+        1155.0,
+        35.0
+      ],
+      "source_dir": "data/PV output/XXGD-S-480_480 W",
+      "hourly": "XXGD-S-480_480W/hourly.csv",
+      "monthly_hourly": "XXGD-S-480_480W/monthly_hourly.csv",
+      "angle_rows": 1147,
+      "hourly_columns": 8762,
+      "monthly_hourly_columns": 290,
+      "hourly_sha256": "f7d6f179d8ddcc1cdebf3f15e1decd1a81b9f3aa4e67eab565d53413805eac7c",
+      "monthly_hourly_sha256": "067e135f12db447b47795018c9640629e5afb74e5b03eaa19bd70385d25a50c2",
+      "max_month_error_wh": 4.3655745685100555e-11,
+      "max_annual_error_wh": 9.313225746154785e-10
+    },
+    "RS-M072BZ": {
+      "model_id": "RS-M072BZ",
+      "manufacturer": "仁烁",
+      "power_w": 140.0,
+      "dimensions_mm": [
+        1200.0,
+        600.0,
+        7.0
+      ],
+      "source_dir": "data/PV output/RS-M072BZ_140 W",
+      "hourly": "RS-M072BZ_140W/hourly.csv",
+      "monthly_hourly": "RS-M072BZ_140W/monthly_hourly.csv",
+      "angle_rows": 1147,
+      "hourly_columns": 8762,
+      "monthly_hourly_columns": 290,
+      "hourly_sha256": "ca7be322f53c82f6c9e07df21e07adda1aa93c82159acc660a82ba174f5e4647",
+      "monthly_hourly_sha256": "029778a00ece341f72350fd3626a3967d6722bb2e3c450236e7ef94e4e7a6805",
+      "max_month_error_wh": 1.0913936421275139e-11,
+      "max_annual_error_wh": 2.3283064365386963e-10
+    }
+  }
+}

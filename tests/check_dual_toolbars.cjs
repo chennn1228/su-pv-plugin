@@ -1,0 +1,66 @@
+const assert=require('assert/strict'),fs=require('fs'),path=require('path'),{pathToFileURL}=require('url');
+const {createRequire}=require('module');
+const runtime=createRequire('C:/Users/Administrator/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/package.json');
+const {chromium}=runtime('playwright');
+const fixture=JSON.parse(fs.readFileSync(process.env.PV_DUAL_FIXTURE||'.dual_check/fixtures.json','utf8'));
+(async()=>{
+ const browser=await chromium.launch({executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+ try{
+  const errors=[],pages={};
+  for(const key of ['panel1','panel2','array1','array2']){
+   const page=await browser.newPage({viewport:{width:1400,height:900}});pages[key]=page;
+   page.on('pageerror',e=>errors.push(key+': '+e.message));
+   await page.addInitScript(()=>{window.exports=[];window.workerStarts=0;const NativeWorker=window.Worker;window.Worker=class extends NativeWorker{constructor(...args){super(...args);window.workerStarts++;}};window.sketchup={ready(){},preview(){},angles(){},export_csv(data){window.exports.push(JSON.parse(data));}};});
+   const array=key.startsWith('array');
+   await page.goto(pathToFileURL(path.resolve('ui',array?'pv_array.html':'pv_panel.html')).href);
+   await page.evaluate(({array,data})=>(array?PVArray:PV).receive(data),{array,data:fixture[key]});
+  }
+  assert.equal(await pages.panel1.locator('.chart-section').isVisible(),true);
+  assert.equal(await pages.panel2.locator('.chart-section').isVisible(),false);
+  await pages.panel1.locator('#exportCsv').click();
+  assert.equal((await pages.panel1.evaluate(()=>window.exports[0])).context.branch,'panel');
+  assert.equal(await pages.panel2.locator('#azimuth').inputValue(),'150');
+  const array=pages.array1;
+  assert.equal(await array.locator('[data-array-view="power"]').isVisible(),true);
+  assert.equal(await pages.array2.locator('[data-array-view="power"]').isVisible(),false);
+  assert.equal(await pages.array2.locator('#build').isVisible(),true);
+  await array.locator('[data-array-view="power"]').click();
+  await array.locator('#exportCsv').click();
+  const original=await array.evaluate(()=>window.exports[0]);
+  assert.equal(original.context.count,fixture.array1.count);
+  assert.deepEqual(original.values,fixture.array1.prediction.values);
+  await array.evaluate(()=>PV.exported({cancelled:true}));
+  await array.locator('#predictionBranch').selectOption('shade');
+  assert.equal(await array.locator('#labCompute').count(),0);
+  await array.waitForFunction(()=>document.querySelector('#shadeStatus').classList.contains('annual-loss'));
+  assert.equal(await array.locator('[data-lab-step="2"]').getAttribute('aria-current'),'step');
+  await array.locator('[data-lab-step="4"]').click();
+  await array.locator('#exportCsv').click();
+  assert.equal((await array.evaluate(()=>window.exports.at(-1))).context.branch,'aggregate');
+  await array.evaluate(()=>PV.exported({cancelled:true}));
+  await array.locator('#shadingMethod').selectOption('per_panel');
+  await array.waitForFunction(()=>document.querySelector('#shadeStatus').classList.contains('annual-loss'));
+  await array.locator('#exportCsv').click();
+  assert.equal((await array.evaluate(()=>window.exports.at(-1))).context.branch,'per_panel');
+  await array.evaluate(()=>PV.exported({cancelled:true}));
+  const starts=await array.evaluate(()=>window.workerStarts);
+  await array.locator('#shadingMethod').selectOption('aggregate');
+  await array.waitForFunction(()=>document.querySelector('#shadeStatus').classList.contains('annual-loss'));
+  assert.equal(await array.evaluate(()=>window.workerStarts),starts,'Switching back discarded the valid cached correction');
+  const next=structuredClone(fixture.array1);next.target_id++;next.count--;next.positions.pop();next.capacity_kwp=next.count*next.spec.power_w/1000;
+  next.prediction.values=next.prediction.values.map(v=>v*next.count/fixture.array1.count);
+  next.prediction.annual_kwh=next.prediction.values.reduce((a,b)=>a+b,0)/1000;next.prediction.peak_wh=Math.max(...next.prediction.values);
+  await array.evaluate(data=>PVArray.receive(data),next);
+  await array.waitForFunction(()=>document.querySelector('#shadeStatus').classList.contains('annual-loss'));
+  assert.equal(await array.evaluate(()=>window.workerStarts),starts+1,'A changed array was not automatically recalculated');
+  await array.locator('#exportCsv').click();
+  const revised=await array.evaluate(()=>window.exports.at(-1));
+  assert.equal(revised.context.count,next.count);assert.equal(revised.context.target_id,next.target_id);
+  assert(revised.values.every((v,i)=>v<=next.prediction.values[i]+1e-6),'The changed array retained stale correction values');
+  const shots=process.env.PV_UI_CHECK_DIR||'.dual_check';
+  await pages.panel1.screenshot({path:path.join(shots,'panel1.png')});
+  await array.screenshot({path:path.join(shots,'array1.png')});
+  assert.deepEqual(errors,[]);
+  console.log('Dual UI passed: simultaneous independent windows, integrated panel/array forecasts, shading and CSV, separate toolbar2 placement.');
+ }finally{await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});
