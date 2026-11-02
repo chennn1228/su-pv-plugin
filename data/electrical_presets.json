@@ -1,0 +1,24 @@
+{
+  "modules": {
+    "TSM-NE19R": {
+      "power_w": 630,
+      "values": {"voc": 50.3, "vmp": 42.0, "isc": 15.94, "imp": 15.01, "beta_voc": -0.24, "alpha_isc": 0.04, "gamma_p": -0.29, "module_max": 1500},
+      "source": "https://static.trinasolar.com/sites/default/files/DT-M-0093-G-CN_C_Datasheet_NE19R_2025_A.pdf",
+      "edition": "TSM_CN_2025_A",
+      "note": "NE19R 630 W功率档；不混用NEG19RC或其他修订版参数。规格书未提供Vmp温度系数。"
+    }
+  },
+  "design": {
+    "values": {"tmin": -20, "tmax": 70, "isc_factor": 1.25, "dc_ac_max": 1.2, "series_count": 0},
+    "note": "项目初设值，可调；温度须以项目极端条件校核，容配比不是组件固有参数，短路电流系数须按适用标准及双面增益调整。"
+  },
+  "inverters": [
+    {
+      "id": "SG50CX-P3-CN",
+      "label": "阳光电源 SG50CX-P3-CN · 50 kW",
+      "values": {"device_name": "SG50CX-P3-CN", "dc_max": 1100, "mppt_min": 160, "mppt_max": 1000, "mppt_current": 32, "mppt_isc": 40, "port_current": 20, "port_isc": 30, "mppts": 4, "ports": 2, "ac_kw": 50, "dc_kw": null},
+      "source": "https://cn.sungrowpower.com/product_detail/302.html",
+      "note": "四路MPPT额定工作电流40/40/32/32 A、短路电流50/50/40/40 A；统一算法保守采用各路最小值32/40 A。每串工作电流20 A，端子30 A；短路电流另保守限制为端子30 A。页面未列直流容量上限，不填造数值。"
+    }
+  ]
+}

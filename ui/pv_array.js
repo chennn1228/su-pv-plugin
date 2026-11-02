@@ -1,17 +1,28 @@
 'use strict';
 (function(){
  const el=id=>document.getElementById(id);
- const state={data:null,request:0,dirty:true,building:false,angleDrag:false,timer:null,worker:null,shaded:null,geometry:null,query:null};
+ const state={data:null,view:'layout',request:0,dirty:true,building:false,angleDrag:false,timer:null,worker:null,shaded:null,geometry:null,query:null};
  const controls=window.PVPanelControls.create({onModelChange(){state.angleDrag=false;change();},onInput(){state.angleDrag=true;change();},onCommit(){state.angleDrag=false;change();}});
- function params(){return {target_id:state.data&&state.data.target_id,request_id:state.request,model_id:el('panelModel').value,azimuth:Number(el('azimuth').value),tilt:Number(el('tilt').value),gap_x_mm:Number(el('gapX').value)*10,gap_y_mm:Number(el('gapY').value)*10};}
+ const mount=window.PVDesignAdvice.create({params:()=>params(),onChange(commit){state.angleDrag=!commit;change();},apply(settings){controls.set(settings.azimuth,settings.tilt);state.angleDrag=false;change();}});
+ const buildLabel=()=>state.data&&state.data.editing_existing?'更新阵列':'生成阵列';
+ const access=window.PVAccess.create({onChange(){state.angleDrag=false;change();},onRedraw:draw,onEditing:updateBuild,onPick(mode){
+  if(!state.data||state.building||!validGaps()||!access.valid())return;
+  if(!window.sketchup||typeof window.sketchup.access_pick!=='function'){PVArray.fail('选取功能尚未加载，请重新加载插件后打开阵列工具。');return;}
+  clearTimeout(state.timer);state.request++;state.dirty=true;updateBuild();
+  window.sketchup.access_pick(JSON.stringify({...params(),pick_mode:mode}));
+ }});
+ function updateBuild(){el('build').disabled=state.building||state.dirty||!state.data||!state.data.count||!mount.valid()||access.editing||!!(state.data.access_validation&&!state.data.access_validation.valid);}
+ function params(){return {target_id:state.data&&state.data.target_id,request_id:state.request,clearance_mm:mount.value(),model_id:el('panelModel').value,azimuth:Number(el('azimuth').value),tilt:Number(el('tilt').value),gap_x_mm:Number(el('gapX').value)*10,gap_y_mm:Number(el('gapY').value)*10,access:access.values()};}
  function validGaps(){return ['gapX','gapY'].every(id=>el(id).value.trim()!==''&&Number.isInteger(Number(el(id).value))&&Number(el(id).value)>=0&&Number(el(id).value)<=Number(el(id).max));}
  function change(){
   if(state.building)return;
+  if(window.PVFormulae)PVFormulae.pendingLayout();
+  window.PVDesignAdvice.invalidate();
   invalidateShading();if(lab)lab.invalidate();
-  state.request++;state.dirty=true;window.PV.clear();el('build').disabled=true;el('build').textContent='生成阵列';el('arrayStatus').textContent='';clearTimeout(state.timer);
-  if(!validGaps()){PVArray.fail('请输入当前范围内的整数厘米数值。');return;}
+  state.request++;state.dirty=true;window.PV.clear();el('build').disabled=true;el('build').textContent=buildLabel();el('arrayStatus').textContent='';clearTimeout(state.timer);
+  if(!validGaps()||!access.valid()||!mount.valid()){PVArray.fail('请输入有效间距、净空、退让距离和通道净宽。');return;}
   el('arrayError').hidden=true;
-  state.timer=setTimeout(()=>{if(window.sketchup&&state.data&&!state.angleDrag)window.sketchup.preview(JSON.stringify(params()));},120);
+  state.timer=setTimeout(()=>{if(window.sketchup&&state.data&&!state.angleDrag)window.sketchup.preview(JSON.stringify(params()));},access.values().automatic?300:120);
  }
  let lab=null;
  lab=window.PVShadingLab.create({
@@ -24,7 +35,7 @@
  });
  function syncLabView(){
   if(!lab)return;
-  const power=el('arrayLayout').hidden,shade=el('predictionBranch').value==='shade',active=power&&shade;
+  const power=state.view==='power',shade=el('predictionBranch').value==='shade',active=power&&shade;
   if(active&&lab.step<4&&(el('day').disabled||el('hour').disabled||el('period').value!=='daily')){document.querySelector('[data-view="surface"]').click();el('period').value='daily';el('period').dispatchEvent(new Event('change'));}
   lab.setActive(active);el('shadeControls').hidden=!power;
   document.querySelector('.array-power').hidden=!power||(shade&&(lab.step!==4||!state.shaded));
@@ -36,6 +47,7 @@
   else node.innerHTML='<small>全年减少</small><strong>'+loss.toFixed(2)+'<span>%</span></strong>';
  }
  function invalidateShading(){
+  if(window.PVExport)window.PVExport.invalidate();
   stopWorker();state.shaded=null;state.geometry=null;
   setShadeStatus('');el('shadeRetry').hidden=true;if(lab)lab.resetResult();
  }
@@ -51,11 +63,11 @@
   window.PV.receive({...prediction,export_context:{kind:'array',count:state.data.count,target_id:state.data.target_id,branch:prediction.method?'shade':'baseline'}});
  }
  function showForecast(compute=false){
-  if(state.data&&state.data.layout_only){window.PV.clear();return;}
+  if(state.data&&(state.data.layout_only||state.data.constraints_only)){window.PV.clear();return;}
   if(!state.data||state.dirty){window.PV.clear('请等待有效阵列排布');syncLabView();return;}
   const shade=el('predictionBranch').value==='shade';el('shadeRetry').hidden=true;
   if(!shade){const pending=!!state.worker;stopWorker();if(pending)lab.calculation('计算已取消');setShadeStatus('');receiveForecast(state.data.prediction);syncLabView();return;}
-  if(!state.data.prediction.data_available){receiveForecast(state.data.prediction);lab.calculation('暂无原始出力数据，可以先查看太阳与遮挡几何');syncLabView();return;}
+  if(!state.data.prediction.data_available){receiveForecast(state.data.prediction);lab.calculation(state.data.prediction.missing_data_message||'暂无出力数据');syncLabView();return;}
   if(state.shaded&&!compute){
    setShadeStatus('',state.shaded.loss_pct);
    lab.calculation('计算完成',state.shaded);receiveForecast({...state.data.prediction,...state.shaded,baseline_values:state.data.prediction.values});syncLabView();return;
@@ -78,6 +90,11 @@
   }catch(error){shadeFailed(error.message);}
  }
  el('predictionBranch').addEventListener('change',()=>showForecast());
+ document.querySelectorAll('[data-branch]').forEach(button=>button.addEventListener('click',()=>{
+  el('predictionBranch').value=button.dataset.branch;
+  document.querySelectorAll('[data-branch]').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',b===button?'true':'false');});
+  showForecast();
+ }));
  el('shadeRetry').addEventListener('click',()=>showForecast(true));
  window.addEventListener('unload',stopWorker);
  function prepare(canvas){
@@ -121,44 +138,65 @@
   c.restore();
  }
  function planFrame(d){
-  const axes=d.frame_axes,dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],unit=a=>{const n=Math.hypot(...a);return a.map(v=>v/n);};
-  // Orthographic view along the installation normal; screen-up follows projected north.
-  // Vertical faces use world-up, with the north projection shown in the guide.
-  const n=axes[2],seed=Math.abs(n[2])<1e-6?[0,0,1]:[0,1,0];
-  const up=unit(seed.map((v,i)=>v-dot(seed,n)*n[i])),right=unit(cross(up,n));
-  const vector=q=>[dot(q,right),-dot(q,up)],raw=(x,y)=>vector(axes[0].map((v,i)=>v*x+axes[1][i]*y));
-  return {vector,raw};
+  const axes=d.frame_axes;
+  const facade=['wall','fence'].includes(d.surface_kind)||d.flush_only;
+  const elevation=Math.abs(axes[2][2])<1e-7||(facade&&Math.abs(axes[2][2])<1-1e-7);
+  // Roofs use world XY; vertical surfaces use their own horizontal/up axes.
+  const dot=(p,q)=>p.reduce((sum,v,i)=>sum+v*q[i],0);
+  const n=axes[2],length=Math.hypot(n[0],n[1]),right=elevation?[-n[1]/length,n[0]/length,0]:axes[0];
+  const up=elevation?[-n[2]*right[1],n[2]*right[0],n[0]*right[1]-n[1]*right[0]]:axes[1];
+  const vector=elevation?q=>[dot(q,right),-dot(q,up)]:q=>[q[0],-q[1]];
+  const raw=(x,y)=>vector(axes[0].map((v,i)=>v*x+axes[1][i]*y));
+  return {vector,raw,elevation};
  }
- function drawPlan(){
-  const canvas=el('layoutCanvas'),{c,w,h}=prepare(canvas);if(!state.data)return;const d=state.data;
-  const {vector,raw}=planFrame(d);
+ function surfaceCard(d){
+  const kind=d.surface_kind||'surface',name={roof:'屋顶',wall:'立面',fence:'围墙'}[kind]||'安装面';
+  const rings=d.boundary?[d.boundary.outer,...d.boundary.holes]:[[[0,0],[d.width_mm,0],[d.width_mm,d.height_mm],[0,d.height_mm]]];
+  const scale=Math.min(72/d.width_mm,52/d.height_mm),ox=(84-d.width_mm*scale)/2,oy=(64-d.height_mm*scale)/2;
+  const outline=rings.map(r=>r.map((p,i)=>(i?'L':'M')+(ox+p[0]*scale).toFixed(3)+' '+(64-oy-p[1]*scale).toFixed(3)).join(' ')+'Z').join(' ');
+  el('targetName').textContent=name;const node=document.createElementNS('http://www.w3.org/2000/svg','path');
+  node.setAttribute('d',outline);node.setAttribute('fill','#dcebf6');node.setAttribute('stroke','#6495b8');node.setAttribute('stroke-width','1.2');node.setAttribute('fill-rule','evenodd');el('targetPreview').replaceChildren(node);
+  el('targetPreview').setAttribute('aria-label',name+'实际轮廓');el('targetPreview').dataset.kind=kind;el('targetPreview').dataset.rings=rings.length;
+  el('targetSize').textContent=(d.width_mm/1000).toFixed(2)+' × '+(d.height_mm/1000).toFixed(2)+' m';
+ }
+ function drawPlan(id='layoutCanvas'){
+  const canvas=el(id);if(!canvas.clientWidth||!canvas.clientHeight)return;const {c,w,h}=prepare(canvas);if(!state.data)return;const d=state.data;
+  const {vector,raw,elevation}=planFrame(d);
+  const title=elevation?({wall:'立面正视图',fence:'围墙正视图'}[d.surface_kind]||'安装面正视图'):'水平俯视图';
+  el('layoutViewTitle').textContent=title;canvas.setAttribute('aria-label',title);
   const plane=[[0,0],[d.width_mm,0],[d.width_mm,d.height_mm],[0,d.height_mm]],rawPlane=plane.map(p=>raw(...p));
-  const xs=rawPlane.map(p=>p[0]),ys=rawPlane.map(p=>p[1]),loX=Math.min(...xs),hiX=Math.max(...xs),loY=Math.min(...ys),hiY=Math.max(...ys);
+  const geom=window.SuPvSceneShading.geometry(d);
+  const panels=geom.objects.map(panel=>window.SuPvSceneShading.corners(panel).map(q=>vector(q.map((x,i)=>x+geom.first[i]))));
+  const all=rawPlane.concat(...panels),xs=all.map(p=>p[0]),ys=all.map(p=>p[1]),loX=Math.min(...xs),hiX=Math.max(...xs),loY=Math.min(...ys),hiY=Math.max(...ys);
   const pad={left:76,right:52,top:Math.min(76,Math.max(52,h*.20)),bottom:Math.min(62,Math.max(52,h*.28))};
   const scale=Math.max(.00001,Math.min((w-pad.left-pad.right)/(hiX-loX||1),(h-pad.top-pad.bottom)/(hiY-loY||1)));
   const ox=pad.left+(w-pad.left-pad.right-(hiX-loX)*scale)/2,oy=pad.top+(h-pad.top-pad.bottom-(hiY-loY)*scale)/2;
-  const point=(x,y)=>{const p=raw(x,y);return [ox+(p[0]-loX)*scale,oy+(p[1]-loY)*scale];};
+  const screen=p=>[ox+(p[0]-loX)*scale,oy+(p[1]-loY)*scale],point=(x,y)=>screen(raw(x,y));
   const rings=d.boundary?[d.boundary.outer,...d.boundary.holes]:[plane];
   c.beginPath();rings.forEach(ring=>{ring.forEach((p,i)=>{const q=point(...p);i?c.lineTo(...q):c.moveTo(...q);});c.closePath();});c.fillStyle='#eef4f9';c.fill('evenodd');c.strokeStyle='#9db1c1';c.lineWidth=1;c.stroke();
   if(d.boundary){path(c,plane.map(p=>point(...p)),true);c.setLineDash([3,4]);c.strokeStyle='#d6e0e8';c.lineWidth=.7;c.stroke();c.setLineDash([]);}
   canvas.dataset.holes=d.boundary?d.boundary.holes.length:0;canvas.dataset.outerVertices=rings[0].length;
-  const center=point(d.width_mm/2,d.height_mm/2),shape=hull(d.footprint);
-  d.positions.forEach(position=>{path(c,shape.map(p=>point(position[0]+p[0],position[1]+p[1])),true);c.fillStyle='rgba(33,102,172,.23)';c.fill();c.strokeStyle='#2166ac';c.lineWidth=.7;c.stroke();});
+  const center=point(d.width_mm/2,d.height_mm/2);
+  if(id!=='accessCanvas'||access.stage==='result')panels.forEach(polygon=>{path(c,polygon.map(screen),true);c.fillStyle='rgba(33,102,172,.23)';c.fill();c.strokeStyle='#2166ac';c.lineWidth=.7;c.stroke();});
+  access.draw(c,point,d,canvas);
   const dimensions=[];
   // Host edge lengths are separate from the net-clearance dimensions.
   [[plane[1],plane[2],d.height_mm],[plane[2],plane[3],d.width_mm]].forEach(([a,b,value])=>{
    const A=point(...a),B=point(...b),dx=B[0]-A[0],dy=B[1]-A[1],len=Math.hypot(dx,dy)||1;let nx=-dy/len,ny=dx/len;
    const mid=[(A[0]+B[0])/2,(A[1]+B[1])/2];if((mid[0]-center[0])*nx+(mid[1]-center[1])*ny<0){nx=-nx;ny=-ny;}
-   label(c,(value/1000).toFixed(2)+' m',mid[0]+nx*19,mid[1]+ny*19,'#617789');
+   const aa=raw(...a),bb=raw(...b),projectedLength=Math.hypot(bb[0]-aa[0],bb[1]-aa[1]);
+   if(projectedLength>1e-5){const text=(projectedLength/1000).toFixed(2)+' m',labelY=elevation&&ny<-.9?Math.min(mid[1]+ny*19,oy-19):mid[1]+ny*19;label(c,text,mid[0]+nx*19,labelY,'#617789');dimensions.push({text,metres:projectedLength/1000});}
   });
-  directionGuide(c,[w-51,45],vector,d.settings.azimuth);
+  if(elevation){const x=w-42,y=48;path(c,[[x,y+13],[x,y-10],[x-3,y-5],[x,y-10],[x+3,y-5]]);c.strokeStyle='#90a7bb';c.lineWidth=.8;c.stroke();label(c,'上',x,y-23,'#617789');}
+  else directionGuide(c,[w-51,45],vector,d.settings.azimuth);
+  canvas.dataset.projection=elevation?'elevation':'horizontal';canvas.dataset.firstPanel=JSON.stringify(panels[0]||[]);
   canvas.dataset.dimensions=JSON.stringify(dimensions);canvas.dataset.north=JSON.stringify(vector([0,1,0]));canvas.dataset.east=JSON.stringify(vector([1,0,0]));
   canvas.dataset.count=d.count;canvas.dataset.targetId=d.target_id;canvas.dataset.gapX=d.settings.gap_x_mm;canvas.dataset.gapY=d.settings.gap_y_mm;
  }
  function drawIso(){
   const canvas=el('isoCanvas'),{c,w,h}=prepare(canvas);if(!state.data||!state.data.unit_corners)return;const d=state.data;
   const cols=Math.min(2,Math.max(1,d.columns)),rows=Math.min(2,Math.max(1,d.rows)),px=d.projected_width_mm,py=d.projected_height_mm,gx=d.settings.gap_x_mm,gy=d.settings.gap_y_mm;
-  const minX=Math.min(...d.footprint.map(p=>p[0])),minY=Math.min(...d.footprint.map(p=>p[1])),lift=-Math.min(...d.unit_corners.map(p=>p[2]));
+  const minX=Math.min(...d.footprint.map(p=>p[0])),minY=Math.min(...d.footprint.map(p=>p[1])),lift=(d.settings.clearance_mm??100)-Math.min(...d.unit_corners.map(p=>p[2]));
   const U=cols*px+(cols-1)*gx,V=rows*py+(rows-1)*gy,axes=d.frame_axes;
   const world=q=>[0,1,2].map(i=>q[0]*axes[0][i]+q[1]*axes[1][i]+q[2]*axes[2][i]);
   // True isometric projection: the X, Y and Z axes have equal foreshortening.
@@ -195,10 +233,15 @@
   const azArc=[];for(let i=0;i<=30;i++){const angle=a*i/30;azArc.push(small([radius*Math.sin(angle),radius*Math.cos(angle)]));}path(c,azArc);c.strokeStyle='#bf9652';c.lineWidth=1;c.stroke();const arrow=small([radius*Math.sin(a),radius*Math.cos(a)]);path(c,[compassCenter,arrow]);c.strokeStyle='#2166ac';c.lineWidth=1.5;c.stroke();label(c,'α '+Number(d.settings.azimuth.toFixed(3))+'°',w-54,99);
   el('unitSize').textContent=cols+' × '+rows;canvas.dataset.azimuth=d.settings.azimuth;canvas.dataset.tilt=d.settings.tilt;canvas.dataset.projection='isometric';
  }
- function draw(){if(state.data&&state.data.forecast_only)return;drawPlan();drawIso();}
+ function draw(){if(state.data&&state.data.forecast_only)return;if(state.view==='access'){drawPlan('accessCanvas');access.drawProcess();}else if(state.view==='layout'){drawPlan();drawIso();}}
  function ruler(id,max){
   const node=el(id+'Ruler'),width=node.clientWidth||220,tickStep=Math.max(5,Math.ceil(max/(width/9)/5)*5);let html='';
   for(let value=0;value<=max&&max>0;value+=tickStep)html+=`<i class="${value%(tickStep*2)===0?'major':''}" style="left:${value/max*100}%"></i>`;node.innerHTML=html;
+ }
+ function lockAngles(d){
+  if(!d.flush_only)return;
+  ['azimuth','azimuthInput','tilt','tiltInput'].forEach(id=>el(id).disabled=true);
+  ['compass','tiltDiagram'].forEach(id=>{el(id).setAttribute('aria-disabled','true');el(id).setAttribute('tabindex','-1');});
  }
  function setGaps(d){
   [['gapX','gap_x_mm','gap_max_x_mm'],['gapY','gap_y_mm','gap_max_y_mm']].forEach(([id,key,maxKey])=>{
@@ -207,40 +250,51 @@
   });
  }
  window.PVArray={
-  waitForSelection(){invalidateShading();lab.invalidate();state.dirty=true;window.PV.clear('请选择光伏板或阵列');},
+  selectView,
+  waitForSelection(){if(window.PVFormulae)PVFormulae.pendingLayout();invalidateShading();lab.invalidate();state.dirty=true;window.PV.clear('请选择光伏板或阵列');},
   receive(data){
    if(state.data&&data.target_id<state.data.target_id)return;const next=!state.data||data.target_id!==state.data.target_id;
    if(!next&&data.request_id<state.request)return;if(state.angleDrag)return;
    invalidateShading();
    if(next){clearTimeout(state.timer);state.request=data.request_id||0;}state.data=data;state.dirty=false;state.building=false;controls.setDisabled(false);
    document.querySelectorAll('input,select,#repick').forEach(control=>control.disabled=false);
-   controls.setRoof(data.roof_normal||(data.forecast_only?null:data.frame_axes[2]),!!data.forecast_only);
-   controls.set(data.settings.azimuth,data.settings.tilt);controls.setCatalog(data.catalog,data.spec.id);controls.setSpec(data.spec);
+   controls.setRoof(data.roof_normal||(data.forecast_only?null:data.frame_axes[2]),!!(data.forecast_only||data.flush_only));
+   mount.set(data.settings.clearance_mm??100);controls.set(data.settings.azimuth,data.settings.tilt);controls.setCatalog(data.catalog,data.spec.id);controls.setSpec(data.spec);
    document.body.classList.toggle('forecast-only',!!data.forecast_only);
-   document.querySelector('.array-mode-tabs').hidden=!!data.forecast_only||!!data.layout_only;
+   document.body.classList.toggle('constraints-only',!!data.constraints_only);
+   el('constraintsTitle').hidden=!data.constraints_only;
+   document.body.classList.toggle('flush-only',!!data.flush_only);
+   if(window.PVExport&&!data.constraints_only)window.PVExport.setPlan(data);
+   access.setDisabled(false);access.setPlan(data);if(window.PVFormulae)PVFormulae.layout(data);
+   const mixed=!!(data.forecast_only&&data.selection_summary&&data.selection_summary.length>1);
+   document.body.classList.toggle('selection-mixed',mixed);
+   document.querySelector('label[for=panelModel]').textContent=mixed?'已选组件':'组件型号';
+   let selected=document.getElementById('selectedModels');if(selected)selected.remove();
+   if(mixed){selected=document.createElement('div');selected.id='selectedModels';data.selection_summary.forEach(s=>{const item=document.createElement('div');const name=document.createElement('strong'),detail=document.createElement('span');name.textContent=s.manufacturer+' · '+s.power_w+' W';detail.textContent=s.count+' 块 · '+Number(s.azimuth.toFixed(2))+'° / '+Number(s.tilt.toFixed(2))+'°';item.append(name,detail);selected.append(item);});document.querySelector('.product-card').append(selected);}
+   document.querySelector('.array-mode-tabs').hidden=!!data.forecast_only||!!data.layout_only||!!data.constraints_only;
    el('forecastReselect').hidden=!data.forecast_only;
    document.querySelector('[data-array-view="power"]').hidden=!!data.layout_only;
    if(data.forecast_only){
+    state.view='power';el('accessWorkspace').hidden=true;
     controls.setDisabled(true);
+    if(window.PVExport)window.PVExport.selection(data);
     el('arrayLayout').hidden=true;el('arrayForecastQuery').hidden=false;el('forecastCount').hidden=false;
     document.querySelectorAll('[data-layout-only]').forEach(node=>node.hidden=true);
     el('forecastCount').textContent=data.count+' 块 · '+data.capacity_kwp.toFixed(2)+' kWp';
     lab.setPlan(data);showForecast();window.PV.resize();return;
    }
+   const overview=el('selectionOverview');if(overview){overview.hidden=true;const header=document.querySelector('.forecast-header');header.append(el('forecastCount'),el('forecastReselect'));}
    setGaps(data);
-   el('targetName').textContent='安装面';
-   const {raw}=planFrame(data),corners=[[0,0],[data.width_mm,0],[data.width_mm,data.height_mm],[0,data.height_mm]].map(p=>raw(...p));
-   const lowX=Math.min(...corners.map(p=>p[0])),highX=Math.max(...corners.map(p=>p[0])),lowY=Math.min(...corners.map(p=>p[1])),highY=Math.max(...corners.map(p=>p[1]));
-   const targetScale=Math.min(62/(highX-lowX),44/(highY-lowY)),tw=(highX-lowX)*targetScale,th=(highY-lowY)*targetScale;
-   const rings=data.boundary?[data.boundary.outer,...data.boundary.holes]:[[[0,0],[data.width_mm,0],[data.width_mm,data.height_mm],[0,data.height_mm]]];
-   const outline=rings.map(ring=>ring.map((p,i)=>{const q=raw(...p);return (i?'L':'M')+((84-tw)/2+(q[0]-lowX)*targetScale)+','+((64-th)/2+(q[1]-lowY)*targetScale);}).join(' ')+' Z').join(' ');
-   el('targetPreview').innerHTML=`<path d="${outline}" fill-rule="evenodd" fill="#edf4fa" stroke="#729abb" stroke-width="1.2"/>`;
-   el('targetSize').textContent=(data.width_mm/1000).toFixed(2)+' × '+(data.height_mm/1000).toFixed(2)+' m';
+   lockAngles(data);
+   surfaceCard(data);
+   if(data.constraints_only)selectView('access');
+   else if(state.view==='access')selectView('layout');
+   access.setVisible(state.view==='access');
    el('forecastCount').textContent=data.count+' 块 · '+data.capacity_kwp.toFixed(2)+' kWp';el('panelCount').textContent=data.count;el('capacity').textContent=data.capacity_kwp.toFixed(2);el('gridSize').textContent=data.columns+'列 × '+data.rows+'行';
-   el('build').disabled=data.count===0;el('build').textContent='生成阵列';el('arrayError').hidden=true;el('arrayStatus').textContent='';lab.setPlan(data);showForecast();draw();
+   updateBuild();el('build').textContent=buildLabel();el('arrayError').hidden=true;el('arrayStatus').textContent='';if(!data.constraints_only)lab.setPlan(data);showForecast();draw();
   },
-  built(result){state.building=false;el('build').disabled=true;el('build').textContent='已生成阵列';el('arrayStatus').textContent='已生成 '+result.count+' 块组件';document.querySelectorAll('input,select,#repick').forEach(control=>control.disabled=false);controls.setDisabled(false);setGaps(state.data);},
-  fail(message){invalidateShading();lab.invalidate();state.dirty=true;window.PV.clear('出力暂不可用');state.building=false;el('arrayError').hidden=false;el('arrayError').textContent=message;el('build').disabled=true;el('build').textContent='生成阵列';el('arrayStatus').textContent='';document.querySelectorAll('input,select,#repick').forEach(control=>control.disabled=false);controls.setDisabled(false);}
+  built(result){state.building=false;access.setDisabled(false);el('build').disabled=true;el('build').textContent=result.editing_existing?'已更新阵列':'已生成阵列';el('arrayStatus').textContent=(result.editing_existing?'已更新 ':'已生成 ')+result.count+' 块组件';document.querySelectorAll('input,select,#repick').forEach(control=>control.disabled=false);controls.setDisabled(false);setGaps(state.data);lockAngles(state.data);},
+  fail(message){if(window.PVFormulae)PVFormulae.pendingLayout();invalidateShading();lab.invalidate();state.dirty=true;window.PV.clear('出力暂不可用');state.building=false;access.setDisabled(false);el('arrayError').hidden=false;el('arrayError').textContent=message;el('build').disabled=true;el('build').textContent=buildLabel();el('arrayStatus').textContent='';document.querySelectorAll('input,select,#repick').forEach(control=>control.disabled=false);controls.setDisabled(false);}
  };
  ['gapX','gapY'].forEach(id=>{
   const range=el(id+'Range');
@@ -248,14 +302,19 @@
   range.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowDown','ArrowRight','ArrowUp'].includes(event.key))return;event.preventDefault();const sign=['ArrowRight','ArrowUp'].includes(event.key)?1:-1,v=Math.max(0,Math.min(Number(range.max),Math.round(Number(range.value)/5)*5+sign*5));range.value=el(id).value=v;change();});
   el(id).addEventListener('input',()=>{if(el(id).value.trim()!=='')range.value=el(id).value;change();});
  });
- el('build').addEventListener('click',()=>{if(!state.data||state.dirty||state.building||!validGaps()||!state.data.count)return;state.building=true;controls.setDisabled(true);el('build').disabled=true;el('build').textContent='正在生成…';document.querySelectorAll('input,select,#repick').forEach(control=>control.disabled=true);if(window.sketchup)window.sketchup.build(JSON.stringify(params()));});
- el('repick').addEventListener('click',()=>{invalidateShading();lab.invalidate();window.PV.clear('请选择安装面');el('build').disabled=true;state.dirty=true;state.request++;clearTimeout(state.timer);if(window.sketchup)window.sketchup.repick();});
- document.querySelectorAll('[data-array-view]').forEach(button=>button.addEventListener('click',()=>{
-  const power=button.dataset.arrayView==='power';
-  document.querySelectorAll('[data-array-view]').forEach(b=>b.classList.toggle('active',b===button));
-  el('arrayLayout').hidden=power;document.querySelector('.array-power').hidden=!power;el('arrayForecastQuery').hidden=!power;el('forecastCount').hidden=!power;el('shadeControls').hidden=!power;document.querySelectorAll('[data-layout-only]').forEach(node=>node.hidden=power);
+ el('build').addEventListener('click',()=>{if(!state.data||state.dirty||state.building||access.editing||!validGaps()||!access.valid()||!state.data.count||(state.data.access_validation&&!state.data.access_validation.valid))return;state.building=true;access.setDisabled(true);controls.setDisabled(true);el('build').disabled=true;el('build').textContent=state.data.editing_existing?'正在更新…':'正在生成…';document.querySelectorAll('input,select,#repick').forEach(control=>control.disabled=true);if(window.sketchup)window.sketchup.build(JSON.stringify(params()));});
+ el('repick').addEventListener('click',()=>{if(window.PVFormulae)PVFormulae.pendingLayout();invalidateShading();lab.invalidate();window.PV.clear(state.data&&state.data.editing_existing?'请选择自动生成的阵列':'请选择安装面');el('build').disabled=true;state.dirty=true;state.request++;clearTimeout(state.timer);if(window.sketchup)window.sketchup.repick();});
+ function selectView(view){
+  if(state.data&&state.data.constraints_only)view='access';
+  else if(view==='access')view='layout';
+  state.view=view;
+  const power=view==='power';
+  document.querySelectorAll('[data-array-view]').forEach(b=>{b.classList.toggle('active',b.dataset.arrayView===view);b.setAttribute('aria-selected',b.dataset.arrayView===view?'true':'false');});
+  el('arrayLayout').hidden=view!=='layout';el('accessWorkspace').hidden=view!=='access';document.querySelector('.array-power').hidden=!power;el('arrayForecastQuery').hidden=!power;el('forecastCount').hidden=!power;el('shadeControls').hidden=!power;document.querySelectorAll('[data-layout-only]').forEach(node=>node.hidden=power);
+  access.setVisible(view==='access');
   syncLabView();if(power)window.PV.resize();else draw();
- }));
+ }
+ document.querySelectorAll('[data-array-view]').forEach(button=>button.addEventListener('click',()=>selectView(button.dataset.arrayView)));
  el('forecastReselect').addEventListener('click',()=>{PVArray.waitForSelection();if(window.sketchup)window.sketchup.repick();});
  window.addEventListener('resize',()=>{draw();if(state.data&&!state.data.forecast_only){ruler('gapX',state.data.gap_max_x_mm/10);ruler('gapY',state.data.gap_max_y_mm/10);}});
  if(window.sketchup&&window.sketchup.ready)window.sketchup.ready();

@@ -1,12 +1,13 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>变电站光伏 · 阵列</title><link rel="stylesheet" href="pv_panel.css"><link rel="stylesheet" href="pv_array.css"><link rel="stylesheet" href="pv_shading_lab.css"><script src="pv_panel_controls.js" defer></script><script src="pv_surface.js" defer></script><script src="pv_shading.js" defer></script><script src="pv_shading_lab.js" defer></script><script src="pv_array.js" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>变电站光伏 · 阵列</title><link rel="stylesheet" href="pv_panel.css"><link rel="stylesheet" href="pv_array.css"><link rel="stylesheet" href="pv_shading_lab.css"><link rel="stylesheet" href="vendor/katex/katex.min.css"><link rel="stylesheet" href="pv_math.css"><script src="vendor/katex/katex.min.js" defer></script><script src="pv_math.js" defer></script><script src="pv_formulae.js" defer></script><script src="pv_characteristics.js?v=20261101.4" defer></script><script src="pv_panel_controls.js?v=20261101.4" defer></script><script src="pv_design_advice.js" defer></script><script src="pv_export.js" defer></script><script src="pv_surface.js" defer></script><script src="pv_scene_shading.js" defer></script><script src="pv_shading.js" defer></script><script src="pv_shading_lab.js" defer></script><script src="pv_access.js" defer></script><script src="pv_array.js" defer></script></head>
 <body data-pv-mode="array">
 <main>
 <aside class="array-sidebar">
 <div class="product-card parameter-module" data-pv-product></div>
 <div class="array-target-card parameter-module" data-layout-only><div class="array-target"><svg id="targetPreview" viewBox="0 0 84 64" role="img" aria-label="安装面示意"></svg><div><strong id="targetName">安装面</strong><span id="targetSize">—</span></div></div><button id="repick" class="secondary">重新选择</button></div>
 <section class="angle-module parameter-module" data-pv-angles></section>
+<section class="parameter-module mount-module" data-pv-mount data-layout-only></section>
 <section class="gap-section parameter-module" data-layout-only><h2 class="section-label">阵列间距</h2>
 <div class="gap-control"><label for="gapX">横向净距 <span><input id="gapX" type="number" min="0" max="0" step="1" value="0" disabled aria-label="横向净距厘米"> cm</span></label><input id="gapXRange" type="range" min="0" max="0" step="1" value="0" disabled aria-label="横向净距滑条" title="滑条每格5厘米；数值框可手输1厘米"><div id="gapXRuler" class="gap-ruler" aria-hidden="true"></div><div id="gapXBounds" class="gap-bounds"></div></div>
 <div class="gap-control"><label for="gapY">纵向净距 <span><input id="gapY" type="number" min="0" max="0" step="1" value="0" disabled aria-label="纵向净距厘米"> cm</span></label><input id="gapYRange" type="range" min="0" max="0" step="1" value="0" disabled aria-label="纵向净距滑条" title="滑条每格5厘米；数值框可手输1厘米"><div id="gapYRuler" class="gap-ruler" aria-hidden="true"></div><div id="gapYBounds" class="gap-bounds"></div></div>
@@ -22,26 +23,69 @@
 <div class="array-submit" data-layout-only><button id="build" class="primary" disabled>生成阵列</button><div id="arrayStatus" role="status"></div><div id="arrayError" role="alert" hidden></div></div>
 </aside>
 <section class="chart-section array-chart">
-<nav class="view-tabs array-mode-tabs" aria-label="阵列视图"><button data-array-view="layout" class="active">阵列排布</button><button data-array-view="power">预测出力</button></nav>
-<div class="forecast-header"><div id="forecastCount" class="forecast-count" hidden></div><button id="forecastReselect" class="secondary forecast-reselect" hidden>重新选择</button></div>
+<div class="array-heading"><h2 id="constraintsTitle" class="section-label" hidden>边界约束</h2><nav class="view-tabs array-mode-tabs" role="tablist" aria-label="阵列视图"><button data-array-view="layout" class="active" role="tab" aria-selected="true">阵列排布</button><button data-array-view="power" role="tab" aria-selected="false">出力预测</button></nav>
+<div class="forecast-header"><div id="forecastCount" class="forecast-count" hidden></div><button id="forecastReselect" class="secondary forecast-reselect" hidden>重新选择</button></div></div>
 <div id="shadeControls" class="shade-controls" hidden>
- <div class="shade-branch"><select id="predictionBranch" aria-label="预测分支"><option value="baseline">原始预测</option><option value="shade">互遮挡实验</option></select><span id="shadeStatus" role="status"></span><button id="shadeRetry" class="secondary" hidden>重试</button></div>
+ <div class="shade-branch"><input id="predictionBranch" type="hidden" value="baseline"><nav class="view-tabs prediction-tabs" aria-label="预测分支"><button data-branch="baseline" class="active" aria-pressed="true">原始预测</button><button data-branch="shade" aria-pressed="false">阴影修正</button></nav><span id="shadeStatus" role="status"></span><button id="shadeRetry" class="secondary" hidden>重试</button></div>
 
 </div>
 <div id="shadingLab" hidden></div>
+<div id="accessWorkspace" hidden>
+ <div class="access-workspace-grid">
+  <section id="accessModule" class="access-module parameter-module">
+   <section class="access-step" data-access-step="scope"><h2 class="section-label"><span>01</span> 排布范围</h2>
+   <button class="secondary access-pick" data-access-mode="exclude">在 SU 中框选禁布区</button>
+   <div id="accessExclusions" class="access-items access-selection"></div>
+   <div class="access-fields">
+    <div class="access-field"><label for="edgeSetback">外边界<span><input id="edgeSetback" type="number" min="0" max="1000" step="0.05" value="0"> m</span></label><input id="edgeSetbackRange" type="range" min="0" max="5" step="0.05" value="0" aria-label="外边界退让滑条"></div>
+    <div class="access-field"><label for="holeSetback" title="屋面孔洞与框选禁布区的边界退让">内部边界<span><input id="holeSetback" type="number" min="0" max="1000" step="0.05" value="0"> m</span></label><input id="holeSetbackRange" type="range" min="0" max="5" step="0.05" value="0" aria-label="孔洞与禁布区退让滑条"></div>
+   </div>
+   </section>
+   <section class="access-step" data-access-step="conditions"><h2 class="section-label"><span>02</span> 检修条件</h2>
+    <button class="secondary access-pick" data-access-mode="entry">在 SU 中选入口</button><div id="accessEntry" class="access-items access-selection"></div>
+    <div class="access-fields">
+     <div class="access-field"><label for="accessWidth">通道净宽<span><input id="accessWidth" type="number" min="0.01" max="1000" step="0.01" value="0.8"> m</span></label><input id="accessWidthRange" type="range" min="0.01" max="3" step="0.01" value="0.8" aria-label="通道净宽滑条"></div>
+     <div class="access-field"><label for="accessSpan">检修分区尺度<span><input id="accessSpan" type="number" min="1" max="1000" step="0.5" value="15"> m</span></label><input id="accessSpanRange" type="range" min="1" max="30" step="0.5" value="15" aria-label="检修分区尺度滑条"></div>
+    </div>
+   </section>
+   <section class="access-step" data-access-step="generate"><h2 class="section-label"><span>03</span> 生成方案</h2>
+    <button id="accessAuto" class="primary">预览通道并重排</button>
+    <div class="access-selection"><button id="accessClear" class="secondary" hidden>移除通道 ×</button></div>
+    <div class="access-process">
+    <nav class="access-process-strip" aria-label="当前方案生成过程">
+     <button type="button" class="access-stage" data-access-stage="zones" aria-pressed="false"><canvas id="accessProcessZones" aria-label="当前屋面检修分区"></canvas><strong><i>01</i> 分区</strong><small id="accessPartitionSize">15 × 15 m</small></button>
+     <button type="button" class="access-stage" data-access-stage="route" aria-pressed="false"><canvas id="accessProcessRoute" aria-label="当前入口与通道路线"></canvas><strong><i>02</i> 连通</strong><small id="accessRouteSummary">待选入口</small></button>
+     <button type="button" class="access-stage active" data-access-stage="result" aria-pressed="true"><canvas id="accessProcessResult" aria-label="当前实际排板结果"></canvas><strong><i>03</i> 重排</strong><small id="accessResultSummary">—</small></button>
+    </nav>
+    </div>
+   </section>
+   <div id="accessStatus" class="access-status" role="status"></div>
+  </section>
+  <div class="access-map-column"><div class="access-impact">
+   <div role="button" tabindex="0" data-access-result="zones" aria-pressed="false" title="点击查看排布范围；数量按最终网格统计，尚未扣除通道"><small><i>01</i> 范围内可排</small><strong id="accessAvailable">—</strong><span>块</span></div>
+   <div role="button" tabindex="0" data-access-result="route" aria-pressed="false" title="点击查看入口与通道"><small><i>02</i> 通道占用</small><strong id="accessRemoved">—</strong><span>块</span></div>
+   <div role="button" tabindex="0" data-access-result="result" aria-pressed="true" class="access-comparison active" title="点击查看最终排板；比较同一约束下的居中排板与平移调整"><small><i>03</i> 方案保留</small><div class="access-count-flow"><span class="access-before"><strong id="accessCentred">—</strong><em>居中排板</em></span><span class="access-count-arrow" aria-hidden="true">→</span><span class="access-after"><strong id="accessRetained">—</strong><em>调整排板</em></span><span class="access-gain-badge">+<b id="accessGain">0</b> 块</span></div></div>
+  </div>
+   <div class="array-preview access-map"><div class="array-preview-heading"><span id="accessViewTitle">排布预览</span><div class="access-legend"><label><input id="accessShowZones" type="checkbox" checked><i class="partition-key" aria-hidden="true"></i>检修分区</label><span class="setback">退让</span><span class="route">通道</span><span class="excluded">禁布区</span></div></div><canvas id="accessCanvas" aria-label="屋面通道与退让预览"></canvas></div>
+  </div>
+ </div>
+<section class="pv-formulas" data-formulas="access" aria-label="边界与通道计算依据"></section>
+</div>
 <div id="arrayLayout">
 <div class="chart-metrics"><div><small>组件数量</small><div><strong id="panelCount">—</strong><span>块</span></div></div><div><small>装机容量</small><div><strong id="capacity">—</strong><span>kWp</span></div></div></div>
 <div class="array-visuals">
-<div class="array-preview"><div class="array-preview-heading"><span>安装面正投影</span><span id="gridSize"></span></div><canvas id="layoutCanvas" aria-label="沿安装面法线观察的阵列正投影"></canvas></div>
+<div class="array-preview"><div class="array-preview-heading"><span id="layoutViewTitle">水平俯视图</span><span id="gridSize"></span></div><canvas id="layoutCanvas" aria-label="阵列排布预览"></canvas></div>
 <div class="array-preview"><div class="array-preview-heading"><span>正等轴测单元</span><span id="unitSize"></span></div><canvas id="isoCanvas" aria-label="正等轴测阵列单元、投影、净距与绝对角度"></canvas></div>
 </div>
+<section class="pv-formulas" data-formulas="layout" aria-label="阵列计算依据"></section>
 </div>
-<div class="array-power" hidden>      <div id="missingData" role="status" hidden>暂无出力数据</div>
-      <div class="chart-toolbar"><nav class="view-tabs" role="tablist" aria-label="出力分析"><button data-view="surface" class="active" role="tab" aria-selected="true">三维分布</button><button data-view="day" role="tab" aria-selected="false">逐时曲线</button><button data-view="month" role="tab" aria-selected="false">月度电量</button></nav><button id="exportCsv" class="secondary" disabled>导出全年 CSV</button></div>
-      <div id="surfaceControls" class="surface-controls"><select id="period" aria-label="三维统计周期"><option value="daily">全年逐日逐时</option><option value="monthly">逐月平均逐时</option></select><span id="surfaceCaption">365天 × 24小时</span><button id="resetView" class="secondary">重置视角</button></div>
-      <div id="surfaceArea" class="visual-area"><div id="plot"><canvas id="surface" aria-label="三维热力曲面"></canvas><canvas id="labels"></canvas><div id="empty">读取对应角度的8760小时数据后显示曲面</div></div></div>
-      <div id="profileControls" class="surface-controls" hidden><select id="profilePeriod" aria-label="逐时曲线统计周期"><option value="daily">单日逐时</option><option value="monthly">月平均逐时</option></select></div><div id="lineMetrics" class="chart-metrics" hidden><div><small id="energyLabel">日电量</small><div><strong id="chartEnergy">—</strong><span>kWh</span></div></div><div><small id="peakLabel">小时峰值</small><div><strong id="chartPeak">—</strong><span id="chartPeakUnit">W</span></div></div></div><div id="lineArea" class="visual-area line-area" hidden><div id="chartSummary"></div><div id="linePlot"><canvas id="lineChart" aria-label="二维出力图"></canvas></div></div>
+<div class="array-power power-workspace" hidden>      <div id="missingData" role="status" hidden>暂无出力数据</div>
+      <div class="chart-toolbar"><nav class="view-tabs" role="tablist" aria-label="出力分析"><button data-view="surface" class="active" role="tab" aria-selected="true">三维分布</button><button data-view="day" role="tab" aria-selected="false">逐时曲线</button><button data-view="month" role="tab" aria-selected="false">月度电量</button></nav><div class="chart-actions"><div id="surfaceControls" class="surface-controls"><select id="period" aria-label="三维统计周期"><option value="daily">全年逐日逐时</option><option value="monthly">逐月平均逐时</option></select><span id="surfaceCaption">365天 × 24小时</span></div><div id="profileControls" class="surface-controls" hidden><select id="profilePeriod" aria-label="逐时曲线统计周期"><option value="daily">单日逐时</option><option value="monthly">月平均逐时</option></select></div><div class="export-actions"><button id="exportCsv" class="secondary" disabled>导出 CSV</button><button id="exportSvg" class="secondary" disabled>导出 SVG / DXF</button></div></div></div>
+
+      <div id="surfaceArea" class="visual-area"><div id="plot"><canvas id="surface" aria-label="三维热力曲面"></canvas><canvas id="labels"></canvas><div id="empty">读取对应角度的8760小时数据后显示曲面</div><button id="resetView" class="secondary plot-reset">重置视角</button></div></div>
+      <div id="lineMetrics" class="chart-metrics" hidden><div><small id="energyLabel">日电量</small><div><strong id="chartEnergy">—</strong><span>kWh</span></div></div><div><small id="peakLabel">小时峰值</small><div><strong id="chartPeak">—</strong><span id="chartPeakUnit">W</span></div></div></div><div id="lineArea" class="visual-area line-area" hidden><div id="chartSummary"></div><div id="linePlot"><canvas id="lineChart" aria-label="二维出力图"></canvas></div></div>
       <div id="legendArea"><div class="legend"><span>0 W</span><div></div><span id="legendMax">— W</span></div></div>
+<section class="pv-formulas" data-formulas="forecast" aria-label="出力计算依据"></section>
 
 </div>
 </section>

@@ -1,7 +1,7 @@
 # encoding: UTF-8
 load File.expand_path('check_plugin.rb',__dir__)
 root=File.expand_path('..',__dir__)
-load "#{root}/scripts/toolbar2/button_03_pv_array.rb"
+load "#{root}/scripts/tools/button_03_array.rb"
 class Numeric
  def to_mm;self*25.4;end
 end
@@ -86,7 +86,7 @@ SuPvArrayTool.activate
 new_tool=SuPvArrayTool.instance_variable_get(:@tool)
 SuPvArrayTool.show_dialog
 new_dialog=SuPvArrayTool.instance_variable_get(:@dialog)
-check(new_dialog.options[:dialog_title].include?('光伏阵列'),'Unified dialog title mismatch')
+check(new_dialog.options[:dialog_title].include?('阵列与出力'),'Unified dialog title mismatch')
 old_dialog.closed.call
 old_dialog.callbacks['ready'].call(nil)
 old_dialog.callbacks['preview'].call(nil,'invalid payload from closed window')
@@ -99,7 +99,7 @@ class Geom::Point3d
  def offset(axis,distance);self.class.new(to_a.zip(axis.to_a).map{|p,v|p+v*distance});end
 end
 # Reproduce selecting a component after native Move/Rotate, then rotating it again and reselecting.
-[[SuPvArrayTool,SuPvPanelTool],[SuPvArrayTool1,SuPvPanelTool1]].each do |tool,panels|
+[[SuPvArrayTool,SuPvPanelTool]].each do |tool,panels|
  original_dialog=tool.method(:show_dialog)
  tool.define_singleton_method(:show_dialog){}
  begin
@@ -119,13 +119,15 @@ end
     tool.select_target(target)
     settings=tool.instance_variable_get(:@params);spec=panels.panel_spec(settings['model_id'])
     plan=SuPvArrayLayout.plan(target[:width],target[:height],target.values_at(:u,:v,:normal).map(&:to_a),spec,settings,target[:region])
-    check(plan['count']>0 && plan['unit_corners'].first(4).all?{|p|p[2].abs<1e-7},'Initial selected-roof layout does not fit the plane')
+    aligned=(settings['azimuth']-SuPvRoofAngles.limits(expected)['azimuth_deg']).abs<1e-7
+    check(plan['count']>0 && aligned && plan['azimuth_locked'],'Initial selected-roof layout did not preserve actual slope direction')
+    check(plan['unit_corners'].first(4).all?{|p|p[2].abs<1e-7},'Initial roof fitting is not coplanar')
     plan['positions'].first(3).each do |position|
      transform=panels.panel_transform(tool.world_origin(position),plan['settings'])
      [[0,0],[spec[:width_mm],0],[spec[:width_mm],spec[:length_mm]],[0,spec[:length_mm]]].each do |x,y|
       point=transform.origin.to_a.each_with_index.map{|p,i|p+transform.axes[0].to_a[i]*x.mm+transform.axes[1].to_a[i]*y.mm}
       signed=point.zip(p0,expected).inject(0.0){|sum,(p,base,n)|sum+(p-base)*n}
-      check(signed.abs<1e-7,'SU preview/component underside does not lie on the transformed installation plane')
+      check(aligned ? (signed-100.mm).abs<1e-7 : signed>=100.mm-1e-7,'SU preview/component intersects the transformed installation plane')
      end
     end
    end
@@ -134,3 +136,39 @@ end
   tool.define_singleton_method(:show_dialog,original_dialog)
  end
 end
+
+# Effective inherited tags control placement, independently of component names.
+fence_parent=Sketchup::ComponentInstance.new(Geom::Transformation.new,'arbitrary_name')
+tag=Struct.new(:name).new('fence')
+fence_parent.define_singleton_method(:layer){tag}
+face=RoofFaceStub.new([[[0,0,0],[200,0,0],[200,0,70],[0,0,70]]])
+target=SuPvArrayTool.frame_from_path([fence_parent,face])
+check(target[:flush_only] && target[:fence],'Inherited fence Tag was ignored')
+check(target[:kind]=='fence','Inherited fence classification was lost')
+check(target[:v].z>0.999,'Fence height axis is not world-up')
+SuPvArrayTool.instance_variable_set(:@target,target)
+SuPvArrayTool.instance_variable_set(:@model,Sketchup.active_model)
+settings={'model_id'=>'TSM-NE19R','azimuth'=>130,'tilt'=>30,'gap_x_mm'=>100,'gap_y_mm'=>100}
+plan=SuPvArrayTool.make_plan(settings)
+check(plan['flush_only'] && plan['fence_overhang'] && plan['count']>0,'Fence did not enforce flush placement with top overhang')
+check(plan['surface_kind']=='fence','Fence type was not sent with the layout')
+check(plan['panel_axes'][2].zip(target[:normal].to_a).all?{|a,b|(a-b).abs<1e-9},'Fence panel normal does not match its host')
+check(plan['positions'].all?{|p|p[1].abs<1e-7},'Fence board extended below the host')
+tag.name='wall'
+target=SuPvArrayTool.frame_from_path([fence_parent,face])
+check(target[:kind]=='wall','Wall classification was lost')
+SuPvArrayTool.instance_variable_set(:@target,target)
+check(SuPvArrayTool.make_plan(settings)['count']==0,'Wall inherited the fence height exception')
+tag.name='fence'
+top=RoofFaceStub.new([[[0,0,0],[200,0,0],[200,10,0],[0,10,0]]])
+target=SuPvArrayTool.frame_from_path([fence_parent,top])
+check(target[:flush_only] && !target[:fence],'Horizontal fence cap permitted a sideways overhang')
+
+# Selecting an ordinary roof after a fence must restore independent rotation.
+tag.name='roof'
+roof=RoofFaceStub.new([[[0,0,0],[500,0,0],[500,300,0],[0,300,0]]])
+target=SuPvArrayTool.frame_from_path([fence_parent,roof])
+check(target[:kind]=='roof','Roof classification was lost')
+SuPvArrayTool.instance_variable_set(:@target,target)
+plan=SuPvArrayTool.make_plan(settings.merge('_flush'=>true,'_fence'=>true))
+check(!plan['flush_only'] && plan['settings']['azimuth']==130 && plan['settings']['tilt']==30,'Fence restrictions leaked into the next ordinary roof')

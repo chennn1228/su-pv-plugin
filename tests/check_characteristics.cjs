@@ -1,0 +1,11 @@
+const assert=require('assert/strict'),C=require('../ui/pv_characteristics.js'),D=require('../ui/pv_electrical_diagram.js'),fixture=require('../output/checks/electrical_fixture.json');
+const p={voc:50.3,vmp:42,isc:15.94,imp:15.01,alpha_isc:.04,beta_voc:-.24,gamma_p:-.29};
+const f=C.fit(p);assert(f);assert.equal(f.current(0),p.isc);assert.equal(f.current(p.voc),0);assert(Math.abs(f.current(p.vmp)-p.imp)<1e-8);
+const h=1e-3,derivative=((p.vmp+h)*f.current(p.vmp+h)-(p.vmp-h)*f.current(p.vmp-h))/(2*h);assert(Math.abs(derivative)<1e-5,'Fitted MPP is not stationary');
+f.points.forEach((point,i)=>{assert(point.i>=0&&point.i<=p.isc);if(i)assert(point.i<=f.points[i-1].i+1e-10);assert(point.p<=p.vmp*p.imp+1e-6);});
+assert.equal(C.fit({...p,vmp:60}),null);assert.match(C.iv(p),/I–V/);assert.match(C.thermal(p),/Pmax/);assert.match(C.iv(p),/curve-type-legend/);assert(!C.iv(p).includes('实线 I–V · 虚线 P–V'));assert.equal((C.thermal(p).match(/temperature-legend/g)||[]).length,3);
+const imported=C.parse('voltage_v,current_a,irradiance_wm2,temperature_c\n0,15,1000,25\n40,14,1000,25\n50,0,1000,25\n0,10,600,25\n35,9,600,25\n47,0,600,25');assert.equal(imported.length,2);assert.match(C.iv(p,imported),/600 W\/m²/);
+assert.throws(()=>C.parse('x,y\n0,15\n40,14\n50,0'));assert.throws(()=>C.parse('voltage_v,current_a\n0,15\n0,14\n50,0'));
+const svg=D.render(fixture.result,{...fixture.input,device_name:'Test & <Model>'},fixture.spec);assert.match(svg,/kWh/);assert.match(svg,/MPPT/);assert.match(svg,/Test &amp; &lt;Model&gt;/);assert(!/\bon\w+=|<script|href=/.test(svg));assert(svg.endsWith('</svg>'));
+assert.match(svg,/电网/);assert(!/QS\*|电网\*/.test(svg));assert(!svg.includes('建筑交流母线')&&!svg.includes('建筑负荷')&&!svg.includes('并网接口')); assert(!/接入组件|交流额定功率|待定/.test(svg));assert.match(svg,/viewBox="0 0 1360 430"/);
+console.log('Characteristic-point fit, MPP derivative, monotonic current, temperature SVG, multi-condition import and electrical symbol SVG passed.');

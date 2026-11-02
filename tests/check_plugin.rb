@@ -3,9 +3,12 @@ stdlib='C:/Program Files/SketchUp/SketchUp 2022/Tools/RubyStdLib'
 $LOAD_PATH.unshift(stdlib,"#{stdlib}/platform_specific")
 require 'enc/encdb'
 require 'enc/trans/transdb'
+require 'fileutils'
+FileUtils.mkdir_p(File.expand_path('../output/checks',__dir__))
 $LOADED_FEATURES << 'sketchup.rb'
 def check(condition,message);raise message unless condition;end
 class Numeric
+ def to_mm;self*25.4;end
  def degrees;self*Math::PI/180.0;end
  def mm;self/25.4;end
 end
@@ -13,13 +16,29 @@ module Geom
  class Vector3d
   attr_reader :x,:y,:z
   def initialize(x,y,z);@x,@y,@z=x,y,z;end
+  def to_a;[x,y,z];end
+  def length;Math.sqrt(x*x+y*y+z*z);end
+  def dot(b);x*b.x+y*b.y+z*b.z;end
   def cross(b);self.class.new(y*b.z-z*b.y,z*b.x-x*b.z,x*b.y-y*b.x);end
  end
  class Point3d
   def initialize(*args);@coords=args.flatten;end
+  def to_a;@coords;end
+  def offset(axis,d);self.class.new(to_a.zip(axis.to_a).map { |a,b| a+b*d });end
+  def transform(tr);self.class.new(tr.apply(to_a));end
  end
  class Transformation
   attr_reader :origin,:axes
+  def initialize;@origin=Point3d.new(0,0,0);@axes=[Vector3d.new(1,0,0),Vector3d.new(0,1,0),Vector3d.new(0,0,1)];end
+  def xaxis;@axes[0];end
+  def yaxis;@axes[1];end
+  def zaxis;@axes[2];end
+  def apply(p);(0..2).map { |i| origin.to_a[i]+(0..2).sum { |j| axes[j].to_a[i]*p[j] } };end
+  def inverse
+   transposed=(0..2).map { |i| Vector3d.new(*(0..2).map { |j| axes[j].to_a[i] }) }
+   neg=(0..2).map { |i| -axes[i].to_a.zip(origin.to_a).sum { |a,b| a*b } }
+   self.class.axes(Point3d.new(neg),*transposed)
+  end
   def self.axes(origin,*axes);value=new;value.instance_variable_set(:@origin,origin);value.instance_variable_set(:@axes,axes);value;end
  end
 end
@@ -82,8 +101,11 @@ end
 root=File.expand_path('..',__dir__)
 load "#{root}/scripts/pv_toolbar.rb"
 load "#{root}/scripts/pv_toolbar.rb"
-check(UI.toolbars.length==2 && UI.toolbars.first.items.length==5,'Reload duplicated toolbar or buttons')
-check(UI.toolbars.first.name=='变电站光伏 · toolbar2','Toolbar still has the experimental name')
+# Geometry adapter is independently checked in check_electrical_mounting.rb.
+# Keep this fixture focused on metadata, transactions and catalog definitions.
+SuPvMounting.define_singleton_method(:definition) { |model,spec,_axes,_normal,_settings| SuPvPanelTool.panel_definition(model,spec) }
+check(UI.toolbars.length==1 && UI.toolbars.first.items.length==8,'Reload duplicated toolbar or buttons')
+check(UI.toolbars.first.name=='变电站光伏','Toolbar still has the experimental name')
 check(!File.exist?("#{root}/scripts/pv_panel_tool.rb"),'Duplicate entry still present')
 spec=SuPvPanelTool.panel_spec
 check(spec[:length_mm]==2382.0 && spec[:width_mm]==1134.0 && spec[:power_w]==630.0,'Real CSV spec mismatch')
@@ -92,30 +114,23 @@ Sketchup.instance_variable_set(:@model,model)
 # The explicit UI payload, rather than a previous global angle, determines the tool and placed component.
 SuPvPanelTool.start_placement(JSON.generate({'azimuth'=>150,'tilt'=>39}))
 tool=SuPvPanelTool.instance_variable_get(:@placement_tool)
-check(tool.instance_variable_get(:@angles)=={'azimuth'=>150,'tilt'=>39,'model_id'=>'TSM-NE19R'},'Placement dropped explicit UI angles')
+check(tool.instance_variable_get(:@angles)=={'azimuth'=>150,'tilt'=>39,'model_id'=>'TSM-NE19R','clearance_mm'=>100.0},'Placement dropped explicit UI angles')
 instance=SuPvPanelTool.create_panel(Geom::Point3d.new(0,0,0),{'azimuth'=>120,'tilt'=>12},spec)
 check(instance.attrs['azimuth_deg']==120 && instance.attrs['tilt_deg']==12,'Placed component metadata uses stale settings')
 check((instance.transformation.axes[1].z-Math.sin(12.degrees)).abs<1e-10,'Actual transform uses stale tilt')
 check(instance.layer==:pv && instance.definition.equal?(model),'Component definition or layer mismatch')
 check(model.operations==[:start,:commit],'Placement transaction mismatch')
-check(SuPvPanelTool.settings=={'azimuth'=>150,'tilt'=>39,'model_id'=>'TSM-NE19R'},'Explicit create unexpectedly reset window settings')
+check(SuPvPanelTool.settings=={'azimuth'=>150,'tilt'=>39,'model_id'=>'TSM-NE19R','clearance_mm'=>100.0},'Explicit create unexpectedly reset window settings')
 # Ensure Ruby block closures dispatch to their own button, not the last entry in the loop.
 $dispatch=[]
-[SuPvStationTool,SuPvPanelTool,SuPvArrayTool,SuPvPredictionTool,SuPvFlushTool].each_with_index do |tool,index|
+[SuPvStationTool,SuPvPanelTool,SuPvArrayTool,SuPvConstraintsTool,SuPvElectricalTool,SuPvPredictionTool,SuPvCsvExportTool,SuPvSvgExportTool].each_with_index do |tool,index|
  tool.define_singleton_method(:activate){$dispatch<<index+1}
 end
 UI.toolbars.first.items.each{|command|command.action.call}
-check($dispatch==[1,2,3,4,5],'Toolbar dispatch mismatch')
-
-# Already registered legacy commands require restart; never append a replacement toolbar.
-commands=SuPvToolbar2.instance_variable_get(:@commands)
-check(commands.map{|c|File.basename(c.small_icon)}==%w[insert_station_24.png pv_panel_24.png pv_array_24.png pv_prediction_24.png pv_flush_24.png], 'Icon paths mismatch')
-SuPvToolbar2.instance_variable_set(:@registration_schema,'legacy')
-count=UI.toolbars.length
-check(SuPvToolbar2.setup==false,'Legacy registration must request restart')
-check(UI.toolbars.length==count && UI.toolbars.first.length==5,'Legacy load appended buttons')
-check(SuPvToolbar2.show==false,'Legacy toolbar must not be shown')
-
+check($dispatch==[1,2,3,4,5,6,7,8],'Toolbar dispatch mismatch')
+commands=SuPvToolbar.instance_variable_get(:@commands)
+check(commands.map{|c|File.basename(c.small_icon)}==%w[insert_station_24.png pv_panel_24.png pv_array_24.png pv_constraints_24.png pv_electrical_24.png pv_prediction_24.png pv_export_csv_24.png pv_export_svg_24.png],'Icon paths mismatch')
+check(commands.all? { |c| File.file?(c.small_icon) && File.file?(c.large_icon) },'Toolbar references a missing icon')
 # encoding: UTF-8
 class Geom::Vector3d
  def to_a;[x,y,z];end
@@ -208,18 +223,10 @@ end
 check(rejected,'An inactive product remained available to the tools')
 SuPvPanelTool.instance_variable_set(:@settings,{'azimuth'=>180,'tilt'=>30,'model_id'=>'JAM54D50 GR'})
 check(SuPvPanelTool.settings['model_id']=='TSM-NE19R','Stale inactive selection did not reset')
-load "#{root}/scripts/pv_csv.rb"
-SuPvCsv.read
-check(SuPvCsv.products.map{|spec|spec[:model]}.sort==catalog.map{|spec|spec[:id]}.sort,'CSV experiment still includes inactive products')
+# Repeatedly loading the public entry must retain one toolbar registration.
+count=UI.toolbars.length
+2.times { load "#{root}/scripts/pv_toolbar.rb" }
+check(UI.toolbars.length==count && UI.toolbars.first.length==8,'Reload duplicated commands')
 
-# Previous three-button sessions must restart; no replacement toolbar or extra commands.
-legacy = UI::Toolbar.new('变电站光伏')
-original = commands.first(3)
-original.each { |command| legacy.add_item(command) }
-SuPvToolbar2.instance_variable_set(:@toolbar,legacy)
-SuPvToolbar2.instance_variable_set(:@commands,original)
-SuPvToolbar2.instance_variable_set(:@registration_schema,'substation_pv_three_v2')
-count = UI.toolbars.length
-check(!SuPvToolbar2.setup && !SuPvToolbar2.show,'Previous three-button session must request restart')
-check(legacy.length==3 && UI.toolbars.length==count,'Migration duplicated or altered registered commands')
-check(!File.exist?("#{root}/scripts/toolbar2/button_04_roof_array.rb"),'Redundant fourth entry remains')
+# Downstream model doubles also isolate support drawing from array update tests.
+SuPvMounting.define_singleton_method(:definition) { |model,spec,_axes,_normal,_settings| SuPvPanelTool.panel_definition(model,spec) }

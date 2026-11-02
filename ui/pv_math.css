@@ -1,0 +1,16 @@
+.math-equation{overflow-x:auto;overflow-y:hidden;padding:4px 0;font-size:13px;color:#36546a;min-width:0}
+.math-equation .katex-display{margin:.65em 0;text-align:left}.math-equation .katex-display>.katex{text-align:left}
+.formula-card{border:1px solid var(--line);border-radius:8px;padding:16px;background:#fbfcfd;min-width:0}
+.formula-card>strong{display:block;font-size:14px;margin-bottom:10px;color:var(--ink)}
+.formula-card>.math-equation,.formula-answer .math-equation{font-size:12px}
+.formula-answer{margin-top:10px;padding:6px 10px;border-radius:5px;background:#eef4f8;color:#286c9d;min-height:34px;font-size:12px}
+.formula-answer .math-equation{color:inherit}.formula-answer:empty{display:none}
+.pv-formulas{margin-top:20px;padding:20px;border:1px solid var(--line);border-radius:10px;background:#fff;min-width:0}
+.pv-formulas-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.pv-formulas-heading .section-label{margin:0}.pv-formula-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.formula-tag{display:inline-block;padding:3px 8px;border-radius:4px;background:#edf3f7;color:#6b8598;font-size:11px;white-space:nowrap;font-weight:400}
+.formula-card-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}.formula-card-heading strong{font-size:14px}
+.formula-symbols{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11px;color:var(--muted);margin-top:12px}.formula-symbols span{white-space:nowrap}
+.formula-scope{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:16px;font-size:11px;color:var(--muted)}.formula-scope>span{padding:3px 8px;background:#f2f5f7;border-radius:4px}
+.pv-mount-formula{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}.pv-mount-formula .math-equation{font-size:11px}
+@media(max-width:1150px){.pv-formula-grid{grid-template-columns:1fr}.pv-formulas{padding:16px}.pv-formula-grid .formula-card{padding:14px}}

@@ -3,11 +3,11 @@
 (function () {
   const el = id => document.getElementById(id);
   const arrayMode = document.body.dataset.pvMode === 'array';
-  const chartSection = document.querySelector(arrayMode ? '.array-power' : '.chart-section');
+  const chartSection = document.querySelector('.power-workspace');
   const state = { values:null, peak:1, azimuth:180, tilt:30, request:0, yaw:-0.62,
     elevation:0.82, zoom:0.44, pendingFrame:false, vertices:null, indices:null,
     hourStart:0, hourEnd:23, hourCount:24, period:'daily', view:'surface', monthly:null, totals:null,
-    displayValues:null, rowCount:365, meshStride:24, reference:null, referenceMonthly:null, referenceTotals:null, displayReference:null,
+    displayValues:null, rowCount:365, meshStride:24, reference:null, referenceMonthly:null, referenceTotals:null,
     exportSnapshot:null, exportPending:false };
   const hourHalf=1.65; // 拉长小时方向；全年天数方向保持原比例。
   const daysInMonth = [31,28,31,30,31,30,31,31,30,31,30,31];
@@ -78,8 +78,9 @@
     function sums(values){
       const monthly=new Array(288).fill(0),totals=new Array(12).fill(0);
       for(let m=0;m<12;m++)for(let d=monthStarts[m];d<monthStarts[m+1];d++)for(let h=0;h<24;h++){
-        const v=values[d*24+h];monthly[m*24+h]+=v/daysInMonth[m];totals[m]+=v/1000;
+        const v=values[d*24+h];monthly[m*24+h]+=v;totals[m]+=v;
       }
+      for(let m=0;m<12;m++){for(let h=0;h<24;h++)monthly[m*24+h]/=daysInMonth[m];totals[m]/=1000;}
       return [monthly,totals];
     }
     [state.monthly,state.totals]=sums(state.values);
@@ -89,15 +90,14 @@
   function monthRow(m){return state.period==='monthly'?m:monthStarts[m];}
   function buildMesh() {
     state.displayValues=state.period==='monthly'?state.monthly:state.values;
-    state.displayReference=state.reference?(state.period==='monthly'?state.referenceMonthly:state.reference):null;
     state.rowCount=state.period==='monthly'?12:365;
     const maximum=Math.max(...state.displayValues);state.colorPeak=maximum||1;
-    state.peak=Math.max(maximum,state.displayReference?Math.max(...state.displayReference):0)||1;
+    state.peak=maximum||1;
     el('legendMax').textContent=maximum.toFixed(2)+' W';
     el('surfaceCaption').textContent=state.period==='monthly'?'12个月 · 独立切片':'365天 × 24小时';
     // 找全年任意一天出现正值的小时包络，只裁掉两端所有天均为0的时段。
     let first=24,last=-1;
-    for(let h=0;h<24;h++)for(let d=0;d<state.rowCount;d++)if(state.displayValues[d*24+h]>0||(state.displayReference&&state.displayReference[d*24+h]>0)){first=Math.min(first,h);last=Math.max(last,h);break;}
+    for(let h=0;h<24;h++)for(let d=0;d<state.rowCount;d++)if(state.displayValues[d*24+h]>0){first=Math.min(first,h);last=Math.max(last,h);break;}
     state.hourStart=last<0?0:Math.max(0,first-1);
     state.hourEnd=last<0?23:Math.min(23,last+1);
     state.naturalStart=state.hourStart;state.naturalEnd=state.hourEnd;
@@ -105,7 +105,7 @@
     state.hourCount=state.hourEnd-state.hourStart+1;
     const count=state.hourCount;
     state.meshStride=count;
-    plot.dataset.hourStart=state.hourStart;plot.dataset.hourEnd=state.hourEnd;plot.dataset.visibleHours=state.hourCount;plot.dataset.period=state.period;plot.dataset.rows=state.rowCount;plot.dataset.peak=maximum;plot.dataset.axisPeak=state.peak;plot.dataset.comparison=String(!!state.displayReference);
+    plot.dataset.hourStart=state.hourStart;plot.dataset.hourEnd=state.hourEnd;plot.dataset.visibleHours=state.hourCount;plot.dataset.period=state.period;plot.dataset.rows=state.rowCount;plot.dataset.peak=maximum;plot.dataset.axisPeak=state.peak;plot.dataset.comparison='false';
     // Each month is a vertical curtain: top and baseline pairs, never connected across months.
     const slices=state.period==='monthly';state.meshStride=count*(slices?2:1);
     const vertices = new Float32Array(state.rowCount*state.meshStride*4);
@@ -177,23 +177,8 @@
     if(!state.reference)return;
     c.save();c.font='11px "Segoe UI","Microsoft YaHei",sans-serif';c.textAlign='left';
     const x=Math.max(150,width-205),y=23;
-    c.beginPath();c.moveTo(x,y-4);c.lineTo(x+20,y-4);c.strokeStyle='#2166ac';c.lineWidth=2.6;c.stroke();c.fillStyle='#2166ac';c.fillText('遮挡折减',x+26,y);
+    c.beginPath();c.moveTo(x,y-4);c.lineTo(x+20,y-4);c.strokeStyle='#2166ac';c.lineWidth=2.6;c.stroke();c.fillStyle='#2166ac';c.fillText('阴影修正',x+26,y);
     c.setLineDash([4,3]);c.beginPath();c.moveTo(x+105,y-4);c.lineTo(x+125,y-4);c.strokeStyle='rgba(111,132,151,.6)';c.lineWidth=1.2;c.stroke();c.fillStyle='#8b9eae';c.fillText('原始预测',x+131,y);c.restore();
-  }
-  function referenceProfiles(c){
-    if(!state.displayReference)return;
-    const selected=state.period==='monthly'?Number(el('month').value)-1:Math.floor(selectedIndex()/24);
-    const rows=state.period==='monthly'?Array.from({length:12},(_,i)=>i):Array.from(new Set([...Array.from({length:27},(_,i)=>Math.min(364,i*14)),364,selected]));
-    c.save();
-    rows.forEach(row=>{
-      c.beginPath();for(let h=state.hourStart;h<=state.hourEnd;h++){
-        const p=project(rowX(row),hourY(h),state.displayReference[row*24+h]/state.peak*1.4);
-        if(h===state.hourStart)c.moveTo(p.x,p.y);else c.lineTo(p.x,p.y);
-      }
-      c.setLineDash(row===selected?[4,3]:[]);c.lineWidth=row===selected?1.2:.65;
-      c.strokeStyle=row===selected?'rgba(111,132,151,.6)':'rgba(125,145,163,.23)';c.stroke();
-    });
-    c.restore();
   }
   function labels(){
     const ratio=window.devicePixelRatio||1;ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,plot.clientWidth,plot.clientHeight);
@@ -206,7 +191,6 @@
     [0,.25,.5,.75,1].forEach(q=>label((state.peak*q).toFixed(0),-1.69,-hourHalf-.07,q*1.4,q===0?-32:-18,0));
     label(state.period==='monthly'?'月份':'天 / 月份',.1,-hourHalf-.27,0,0,16);label('小时',-2.05,0,0,-30,20);
     ctx.textAlign='left';ctx.fillText('平均出力 / W',18,25);ctx.textAlign='center';
-    referenceProfiles(ctx);seriesKey(ctx,plot.clientWidth);
     const hour=Number(el('hour').value),monthly=state.period==='monthly';
     const index=selectedIndex(),day=monthly?Number(el('month').value)-1:Math.floor(index/24),step=monthly?2:1;
     plot.dataset.selectedRow=day;plot.dataset.focus=monthly?'fade-months':'day-profile';
@@ -309,14 +293,15 @@
   function fillDays(){const old=Number(el('day').value)||1,days=daysInMonth[Number(el('month').value)-1];
     el('day').max=days;el('day').value=Math.min(old,days);queryPoint();}
   function sendAngles(){
+    if(!arrayMode&&window.PVDesignAdvice)window.PVDesignAdvice.invalidate();
     invalidateExport();
     if(!window.sketchup){PV.fail('请从SketchUp的“变电站光伏”工具栏打开。');return;}
     el('place').disabled=true;el('error').hidden=true;
-    state.request++;window.sketchup.angles(JSON.stringify({azimuth:state.azimuth,tilt:state.tilt,model_id:el('panelModel').value,request_id:state.request}));
+    state.request++;window.sketchup.angles(JSON.stringify({azimuth:state.azimuth,tilt:state.tilt,model_id:el('panelModel').value,clearance_mm:mount.value(),request_id:state.request}));
   }
   function clearOutput(message){
     invalidateExport();
-    state.values=null;state.monthly=null;state.totals=null;state.displayValues=null;state.reference=null;state.referenceMonthly=null;state.referenceTotals=null;state.displayReference=null;
+    state.values=null;state.monthly=null;state.totals=null;state.displayValues=null;state.reference=null;state.referenceMonthly=null;state.referenceTotals=null;
     ['annual','peak','pointPower','chartEnergy','chartPeak','legendMax'].forEach(id=>el(id).textContent='—');
     ['peak','rows','dayProfile','queryPower'].forEach(key=>delete plot.dataset[key]);
     el('lineChart').removeAttribute('data-values');el('lineChart').removeAttribute('data-total');
@@ -326,10 +311,11 @@
   }
   function updateExport(){
     el('exportCsv').disabled=!state.exportSnapshot||state.exportPending;
-    el('exportCsv').textContent=state.exportPending?'正在导出…':'导出全年 CSV';
+    el('exportCsv').textContent=state.exportPending?'正在导出…':'导出 CSV';
   }
   function invalidateExport(){state.exportSnapshot=null;updateExport();}
   el('exportCsv').addEventListener('click',()=>{
+    if(window.sketchup&&window.sketchup.select_export){window.sketchup.select_export('csv');return;}
     if(!state.exportSnapshot||state.exportPending||!window.sketchup||!window.sketchup.export_csv)return;
     state.exportPending=true;updateExport();
     window.sketchup.export_csv(JSON.stringify(state.exportSnapshot));
@@ -337,17 +323,20 @@
   window.PV={
     exported(result){
       state.exportPending=false;updateExport();
+      if(window.PVExport)window.PVExport.exported();
       if(result.error){el('error').hidden=false;el('error').textContent=result.error;}
     },
     receive(data){
       if(data.request_id!=null&&data.request_id<state.request)return;
       if(state.angleDrag)return;
+      if(window.PVExport)window.PVExport.setForecast(data);
       syncAngles(data.settings.azimuth,data.settings.tilt);
       angleControls.setCatalog(data.catalog,data.spec.id);drawProduct(data.spec);
+      if(!arrayMode)mount.set(data.settings.clearance_mm??100);if(window.PVFormulae)PVFormulae.mount();
       el('error').hidden=true;
       if(!arrayMode){el('place').disabled=false;el('panelContext').hidden=!data.placement_active;el('panelContext').textContent=data.placement_active?'点击模型放置 · Esc取消':'';}
       if(!arrayMode&&data.placement_only){document.body.classList.add('placement-only');invalidateExport();return;}
-      if(data.data_available===false){clearOutput('暂无出力数据');queryPoint();return;}
+      if(data.data_available===false){clearOutput(data.missing_data_message||'暂无出力数据');queryPoint();return;}
       if(!Array.isArray(data.values)||data.values.length!==8760||data.values.some(v=>!Number.isFinite(v)||v<0)){
         clearOutput('出力数据暂不可用');PV.fail('收到的全年出力数据不完整。');return;
       }
@@ -359,13 +348,14 @@
       const context=arrayMode?data.export_context:{kind:'panel',count:1,branch:'panel'};
       state.exportSnapshot=context&&context.count>0?{settings:{...data.settings},context:{...context},values:data.values.slice()}:null;
       updateExport();
+      if(window.PVFormulae)PVFormulae.forecast(data);
       el('annual').textContent=data.annual_kwh.toFixed(2);el('peak').textContent=data.peak_wh.toFixed(2);
       plot.dataset.azimuth=state.azimuth;plot.dataset.tilt=state.tilt;
       el('error').hidden=true;el('empty').hidden=true;if(!arrayMode)el('place').disabled=false;
       if(!arrayMode){el('panelContext').hidden=!data.placement_active;el('panelContext').textContent=data.placement_active?'点击模型放置 · Esc取消':'';}
       buildMesh();queryPoint();
     },
-    clear(message='正在更新阵列…'){clearOutput(message);},
+    clear(message='正在更新阵列…'){if(window.PVExport)window.PVExport.setForecast(null);clearOutput(message);},
     resize(){requestRender();},
     fail(message,angles){
       if(angles)syncAngles(angles.azimuth,angles.tilt);
@@ -375,13 +365,14 @@
   };
 
   const angleControls=arrayMode?{set(){},setSpec(){},setCatalog(){}}:window.PVPanelControls.create({
-    onModelChange(){state.angleDrag=false;clearOutput('正在切换型号…');sendAngles();},
-    onInput(a,t){invalidateExport();state.angleDrag=true;syncAngles(a,t);},
-    onCommit(a,t){state.angleDrag=false;syncAngles(a,t);sendAngles();}
+    onModelChange(){if(window.PVExport)window.PVExport.invalidate();state.angleDrag=false;clearOutput('正在切换型号…');sendAngles();},
+    onInput(a,t){if(window.PVExport)window.PVExport.invalidate();invalidateExport();state.angleDrag=true;syncAngles(a,t);},
+    onCommit(a,t){if(window.PVExport)window.PVExport.invalidate();state.angleDrag=false;syncAngles(a,t);sendAngles();}
   });
+  const mount=arrayMode?null:window.PVDesignAdvice.create({params:()=>({azimuth:state.azimuth,tilt:state.tilt,model_id:el('panelModel').value,clearance_mm:mount.value()}),onChange(commit){if(commit){state.angleDrag=false;sendAngles();}},apply(settings){syncAngles(settings.azimuth,settings.tilt);sendAngles();}});
   fillDays();queryPoint();
   el('month').addEventListener('input',fillDays);el('day').addEventListener('input',queryPoint);el('hour').addEventListener('input',queryPoint);
-  if(!arrayMode)el('place').addEventListener('click',()=>{if(window.sketchup){el('panelContext').hidden=false;el('panelContext').textContent='点击模型放置 · Esc取消';state.angleDrag=false;el('place').disabled=true;window.sketchup.place(JSON.stringify({azimuth:state.azimuth,tilt:state.tilt,model_id:el('panelModel').value}));}});
+  if(!arrayMode)el('place').addEventListener('click',()=>{if(window.sketchup){el('panelContext').hidden=false;el('panelContext').textContent='点击模型放置 · Esc取消';state.angleDrag=false;el('place').disabled=true;window.sketchup.place(JSON.stringify({azimuth:state.azimuth,tilt:state.tilt,model_id:el('panelModel').value,clearance_mm:mount.value()}));}});
   function setPeriod(value){state.period=value;el('period').value=el('profilePeriod').value=value;if(state.values)buildMesh();queryPoint();}
   el('period').addEventListener('change',()=>setPeriod(el('period').value));
   el('profilePeriod').addEventListener('change',()=>setPeriod(el('profilePeriod').value));

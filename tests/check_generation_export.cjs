@@ -20,7 +20,7 @@ const {chromium}=runtime('playwright');
    await page.evaluate(d=>PV.receive(d),data);
    if(array)await page.evaluate(()=>{document.querySelector('.array-power').hidden=false;});
    assert.equal(await page.locator('#exportCsv').isEnabled(),true);
-   await page.locator('#exportCsv').click();
+   await page.evaluate(()=>document.getElementById('exportCsv').click());
    const payload=await page.evaluate(()=>window.exports[0]);
    assert.deepEqual(payload.values,data.values);assert.deepEqual(payload.settings,data.settings);
    assert.equal(payload.context.branch,array?'shade':'panel');

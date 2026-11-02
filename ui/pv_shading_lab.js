@@ -12,19 +12,24 @@
  </section>
  <section data-lab-page="3" class="lab-page" hidden>
   <div class="lab-heading"><div><h2>遮挡投影</h2><p id="labShadowSummary"></p></div><button class="secondary" data-lab-play>播放一天</button></div>
-  <div class="lab-grid lab-shadow-grid"><div class="lab-card"><div class="lab-canvas shadow-canvas"><canvas id="labArrayShadow" aria-label="实际阵列单面、互遮挡区域和太阳射线，点击选择板"></canvas></div><div class="lab-key"><span class="lit">未遮挡</span><span class="shadow">遮挡</span></div></div>
+  <nav class="view-tabs shadow-layer-tabs" aria-label="遮挡来源"><button data-shadow-layer="external">周边遮挡</button><button data-shadow-layer="self">光伏自遮挡</button><button data-shadow-layer="union" class="active">综合遮挡</button></nav><div class="lab-grid lab-shadow-grid"><div class="lab-card"><div class="lab-canvas shadow-canvas"><canvas id="labArrayShadow" aria-label="实际阵列单面、互遮挡区域和太阳射线，点击选择板"></canvas></div><div class="lab-key"><span class="lit">未遮挡</span><span class="external">周边</span><span class="self">自遮挡</span><span class="union">并集</span></div></div>
   <div class="lab-card"><label class="lab-panel-picker">查看板号<input id="labPanelIndex" type="number" min="1" step="1" value="1"></label><div class="lab-canvas panel-canvas"><canvas id="labPanelShadow" aria-label="所选光伏板展开后的实际阴影面积"></canvas></div><div id="labPanelMetrics"></div></div></div>
  </section>
  <section data-lab-page="4" class="lab-page" hidden>
-  <div class="lab-heading"><div><h2>出力修正</h2></div></div>
-  <div id="labCalculationState" role="status"></div><div id="labComparison" class="lab-stat-row" hidden></div><div id="labHourEquation" class="lab-equation" hidden></div>
+  <div class="lab-heading"><div><h2>出力修正</h2><p>面积近似</p></div></div>
+  <div id="labCalculationState" role="status"></div><div id="labComparison" class="lab-stat-row" hidden></div>
+  <div id="labHourSummary" class="lab-hour-summary" aria-label="所选时段出力修正" hidden>
+   <div class="hour-summary-time"><time id="labHourDate"></time><span id="labHourRange"></span></div>
+   <div class="hour-summary-value baseline"><small>原始预测</small><strong><span id="labHourBaseline"></span><em>W</em></strong></div>
+   <div class="hour-summary-value factor"><small>未遮挡比例</small><strong><span id="labHourFactor"></span><em>%</em></strong></div>
+   <div class="hour-summary-value corrected"><small>阴影修正</small><strong><span id="labHourCorrected"></span><em>W</em></strong></div>
+  </div>
  </section>
  <div class="lab-footer"><button id="labPrevious" class="secondary">上一步</button><button id="labNext" class="primary">下一步</button></div>`;
  function create(hooks){
   const mount=$('shadingLab');mount.innerHTML=template;
-  const state={active:false,step:2,location:S.site,plan:null,g:null,now:null,result:null,selected:null,playing:null,frame:null,yaw:-Math.PI/4,zoom:1,hits:[]};
+  const state={active:false,step:2,location:S.site,plan:null,g:null,now:null,result:null,selected:null,playing:null,frame:null,yaw:-Math.PI/4,zoom:1,hits:[],layer:'union'};
   function index(){const m=Number($('month').value),day=Number($('day').value);return ((Date.UTC(state.location.year,m-1,day)-Date.UTC(state.location.year,0,1))/86400000)*24+Number($('hour').value);}
-  function timeLabel(){return `${state.location.year}年${$('month').value}月${$('day').value}日 ${String($('hour').value).padStart(2,'0')}:30`;}
   function stop(){if(state.playing)clearInterval(state.playing);state.playing=null;mount.querySelectorAll('[data-lab-play]').forEach(b=>b.textContent='播放一天');}
   function schedule(){if(!state.frame)state.frame=requestAnimationFrame(()=>{state.frame=null;if(state.active)render();});}
   function timeChanged(){state.now=null;schedule();}
@@ -82,49 +87,50 @@
   }
   $('labSunAngles').addEventListener('click',event=>{const rect=event.currentTarget.getBoundingClientRect();$('hour').value=Math.max(0,Math.min(23,Math.floor((event.clientX-rect.left-42)/(rect.width-58)*24)));$('hour').dispatchEvent(new Event('input'));});
   function polygon(rect){return [[rect[0],rect[1]],[rect[2],rect[1]],[rect[2],rect[3]],[rect[0],rect[3]]];}
+  mount.querySelectorAll('[data-shadow-layer]').forEach(button=>button.addEventListener('click',()=>{
+   state.layer=button.dataset.shadowLayer;mount.querySelectorAll('[data-shadow-layer]').forEach(b=>b.classList.toggle('active',b===button));schedule();
+  }));
   function shadow(){
-   const box=canvas('labArrayShadow'),{c,w,h}=box;
-   if(!state.g||!state.g.panels.length){text(c,'当前没有可分析的板',w/2,h/2);canvas('labPanelShadow');$('labPanelMetrics').textContent='';$('labShadowSummary').textContent='等待有效阵列排布';$('labPanelIndex').disabled=true;return;}
-   $('labPanelIndex').disabled=false;
-   const g=state.g,n=now();
-   if(state.selected===null||state.selected>=g.panels.length)state.selected=n.ratios.indexOf(Math.min(...n.ratios));
+   const {c,w,h}=canvas('labArrayShadow');
+   if(!state.g||!state.g.scene.objects.length){text(c,'当前没有可分析的板',w/2,h/2);canvas('labPanelShadow');return;}
+   const objects=state.g.scene.objects,n=now();
+   if(state.selected===null||state.selected>=objects.length)state.selected=n.ratios.indexOf(Math.min(...n.ratios));
    const chosen=state.selected,co=Math.cos(state.yaw),si=Math.sin(state.yaw);
-   const world=(p,x=0,y=0)=>g.u.map((u,i)=>u*(p[0]+x)+g.v[i]*(p[1]+y)+g.n[i]*p[2]);
+   const world=(id,x=0,y=0)=>{const p=objects[id];return p.origin.map((o,i)=>o+p.axes[0][i]*x+p.axes[1][i]*y);};
    const project=p=>[co*p[0]-si*p[1],-(si*p[0]+co*p[1])/Math.sqrt(3)-p[2]*Math.sqrt(2/3)];
    const depth=p=>(si*p[0]+co*p[1])*Math.sqrt(2/3)-p[2]/Math.sqrt(3);
-   const faceRect=[0,0,g.w,g.l],faces=g.panels.map((p,id)=>({id,points:polygon(faceRect).map(([x,y])=>world(p,x,y)),depth:depth(world(p,g.w/2,g.l/2))}));
-   const rings=state.plan.boundary?[state.plan.boundary.outer,...state.plan.boundary.holes]:[[[0,0],[state.plan.width_mm,0],[state.plan.width_mm,state.plan.height_mm],[0,state.plan.height_mm]]];
-   const origin=state.plan.positions[0],roof=rings.map(ring=>ring.map(([x,y])=>[0,1,2].map(i=>state.plan.frame_axes.reduce((s,axis,k)=>s+([x,y,0][k]-origin[k])*axis[i],0))));
-   const rays=[];
-   for(const s of n.shadows[chosen].slice(0,3)){
-    const r=s.rect,base=world(g.panels[chosen],(r[0]+r[2])/2,(r[1]+r[3])/2),sn=g.n.reduce((v,q,i)=>v+q*n.sun.vector[i],0),t=(g.panels[s.blocker][2]-g.panels[chosen][2])/sn;
-    rays.push({a:base.map((v,i)=>v+n.sun.vector[i]*t),b:base,blocker:s.blocker});
-   }
-   if(n.front_beam&&!rays.length){const p=g.panels[chosen];for(const q of [[.3,.3],[.7,.3],[.5,.7]]){const b=world(p,g.w*q[0],g.l*q[1]);rays.push({a:b.map((v,i)=>v+n.sun.vector[i]*g.l*.65),b});}}
-   const all=faces.flatMap(f=>f.points).concat(roof.flat(),rays.flatMap(r=>[r.a,r.b])).map(project),xs=all.map(p=>p[0]),ys=all.map(p=>p[1]),lo=[Math.min(...xs),Math.min(...ys)],hi=[Math.max(...xs),Math.max(...ys)];
-   const scale=Math.min((w-44)/(hi[0]-lo[0]||1),(h-50)/(hi[1]-lo[1]||1))*state.zoom;
+   const faces=objects.map((p,id)=>({id,points:window.SuPvSceneShading.corners(p),depth:depth(world(id,p.w/2,p.l/2))}));
+   const environment=state.g.scene.environment;
+   const all=faces.flatMap(f=>f.points).map(project),xs=all.map(p=>p[0]),ys=all.map(p=>p[1]);
+   const lo=[Math.min(...xs),Math.min(...ys)],hi=[Math.max(...xs),Math.max(...ys)],scale=Math.min((w-66)/(hi[0]-lo[0]||1),(h-66)/(hi[1]-lo[1]||1))*state.zoom;
    const P=p=>{const q=project(p);return [w/2+(q[0]-(lo[0]+hi[0])/2)*scale,h/2+(q[1]-(lo[1]+hi[1])/2)*scale];};
-   c.beginPath();roof.forEach(r=>{r.map(P).forEach((p,i)=>i?c.lineTo(...p):c.moveTo(...p));c.closePath();});c.fillStyle='#eff4f8';c.fill('evenodd');c.strokeStyle='#c1cfda';c.stroke();
-   const blockers=[...new Set(rays.filter(r=>r.blocker!==undefined).map(r=>r.blocker))];
+   // Clip context at the canvas boundary; do not let distant buildings shrink the PV view.
+   c.save();c.beginPath();c.rect(0,0,w,h);c.clip();
+   environment.forEach(poly=>{path(c,poly.map(P),true);c.fillStyle='rgba(168,181,191,.10)';c.fill();c.strokeStyle='rgba(146,163,177,.22)';c.lineWidth=.5;c.stroke();});
+   const layer=state.layer,color={external:'#e8b644',self:'#3f7fba',union:'#32976b'}[layer];
+   const polygons=id=>layer==='external'?(n.external[id]||[]).map(s=>s.poly):layer==='self'?n.shadows[id].map(s=>s.poly):[...(n.external[id]||[]),...n.shadows[id]].map(s=>s.poly);
+   const fill=(context,polys,projector)=>{
+    context.save();context.fillStyle=color;
+    // Each convex polygon is filled separately with opaque color: overlaps stay the same shade.
+    polys.forEach(poly=>{path(context,poly.map(projector),true);context.fill();});context.restore();
+   };
    state.hits=[];faces.sort((a,b)=>b.depth-a.depth).forEach(f=>{
-    const points=f.points.map(P);path(c,points,true);c.fillStyle='#a9cee5';c.fill();
-    c.beginPath();for(const s of n.shadows[f.id]){polygon(s.rect).map(([x,y])=>P(world(g.panels[f.id],x,y))).forEach((p,i)=>i?c.lineTo(...p):c.moveTo(...p));c.closePath();}c.fillStyle='#e8ad4f';c.fill();
-    path(c,points,true);c.strokeStyle=f.id===chosen?'#183347':blockers.includes(f.id)?'#b67519':'#668dac';c.lineWidth=f.id===chosen||blockers.includes(f.id)?2:.65;c.stroke();state.hits.push({id:f.id,points});
+    const points=f.points.map(P);path(c,points,true);c.fillStyle='#b5d3e8';c.fill();
+    fill(c,polygons(f.id),([x,y])=>P(world(f.id,x,y)));
+    path(c,points,true);c.strokeStyle=f.id===chosen?'#112b42':'#7495ad';c.lineWidth=f.id===chosen?2:.65;c.stroke();state.hits.push({id:f.id,points});
    });
-   rays.forEach(r=>arrow(c,P(r.a),P(r.b),'#b67519'));
-   const marked=P(world(g.panels[chosen],g.w/2,g.l/2));text(c,'#'+(chosen+1),marked[0],marked[1]+4,'center','#183347');
-   blockers.forEach(id=>{const p=P(world(g.panels[id],g.w/2,g.l/2));text(c,'#'+(id+1),p[0],p[1]+4,'center','#8e5b17');});
-   // World compass uses the same camera as the array.
-   const C=[w-37,35],p0=project([0,0,0]);[[0,1,0,'N'],[1,0,0,'E']].forEach(v=>{const p=project(v);arrow(c,C,[C[0]+(p[0]-p0[0])*24,C[1]+(p[1]-p0[1])*24],'#93a9ba');text(c,v[3],C[0]+p[0]*32,C[1]+p[1]*32);});
-   $('labPanelIndex').max=g.panels.length;$('labPanelIndex').value=chosen+1;
-   const single=canvas('labPanelShadow'),C2=single.c,margin=26,k=Math.min((single.w-margin*2)/g.w,(single.h-margin*2)/g.l),left=(single.w-g.w*k)/2,top=(single.h-g.l*k)/2;
-   C2.fillStyle='#a9cee5';C2.fillRect(left,top,g.w*k,g.l*k);C2.beginPath();n.shadows[chosen].forEach(s=>{const r=s.rect;C2.rect(left+r[0]*k,top+r[1]*k,(r[2]-r[0])*k,(r[3]-r[1])*k);});C2.fillStyle='#e8ad4f';C2.fill();C2.strokeStyle='#668dac';C2.strokeRect(left,top,g.w*k,g.l*k);
-   text(C2,(g.w/1000).toFixed(3)+' m',single.w/2,top+g.l*k+18);text(C2,'板面展开 · #'+(chosen+1),single.w/2,15);
-   C2.save();C2.translate(left-10,top+g.l*k/2);C2.rotate(-Math.PI/2);text(C2,(g.l/1000).toFixed(3)+' m',0,0);C2.restore();
-   const ratio=n.ratios[chosen],area=g.w*g.l/1e6;
-   $('labPanelMetrics').innerHTML=stat('遮挡面积',((1-ratio)*area).toFixed(3),'m²')+stat('未遮挡面积',(ratio*area).toFixed(3),'m²')+`<div class="lab-area-formula">${(ratio*area).toFixed(3)} ÷ ${area.toFixed(3)} ≈ <b>${(ratio*100).toFixed(2)}%</b></div>`;
-   $('labShadowSummary').textContent=n.front_beam?'未遮挡面积 '+(n.factor*100).toFixed(2)+'%':'无正面直射';
-   $('labArrayShadow').dataset.factor=n.factor;$('labArrayShadow').dataset.selected=chosen;$('labPanelShadow').dataset.shadedArea=(1-ratio)*area;
+   const p=objects[chosen],mid=world(chosen,p.w/2,p.l/2);
+   if(n.front_beam)arrow(c,P(mid.map((v,i)=>v+n.sun.vector[i]*p.l*.6)),P(mid),'#c28e2c');
+   const marked=P(mid);text(c,'#'+(chosen+1),marked[0],marked[1]+4,'center','#112b42');c.restore();
+   const compass=[w-37,35];[[0,1,0,'N'],[1,0,0,'E']].forEach(v=>{const q=project(v);arrow(c,compass,[compass[0]+q[0]*24,compass[1]+q[1]*24],'#93a9ba');text(c,v[3],compass[0]+q[0]*32,compass[1]+q[1]*32);});
+   $('labPanelIndex').max=objects.length;$('labPanelIndex').value=chosen+1;$('labPanelIndex').disabled=false;
+   const single=canvas('labPanelShadow'),C=single.c,k=Math.min((single.w-56)/p.w,(single.h-56)/p.l),left=(single.w-p.w*k)/2,top=(single.h-p.l*k)/2;
+   C.fillStyle='#b5d3e8';C.fillRect(left,top,p.w*k,p.l*k);fill(C,polygons(chosen),([x,y])=>[left+x*k,top+y*k]);C.strokeStyle='#668dac';C.strokeRect(left,top,p.w*k,p.l*k);
+   text(C,(p.w/1000).toFixed(3)+' m',single.w/2,top+p.l*k+18);text(C,'板面展开 · #'+(chosen+1),single.w/2,15);
+   const shaded=window.SuPvSceneShading.union(polygons(chosen))/1e6,area=p.w*p.l/1e6,ratio=Math.max(0,1-shaded/area);
+   $('labPanelMetrics').innerHTML=stat('遮挡面积',shaded.toFixed(3),'m²')+stat('未遮挡比例',(ratio*100).toFixed(2),'%');
+   $('labShadowSummary').textContent=n.front_beam?'综合未遮挡面积 '+(n.factor*100).toFixed(2)+'%':'无正面直射';
+   $('labArrayShadow').dataset.factor=n.factor;$('labPanelShadow').dataset.shadedArea=shaded;$('labPanelShadow').dataset.layer=layer;
   }
   let drag=null;
   $('labArrayShadow').addEventListener('pointerdown',e=>{drag={x:e.clientX,last:e.clientX,moved:false};e.currentTarget.setPointerCapture(e.pointerId);});
@@ -138,11 +144,15 @@
   $('labArrayShadow').addEventListener('pointercancel',()=>drag=null);
   $('labArrayShadow').addEventListener('wheel',e=>{e.preventDefault();state.zoom=Math.max(.5,Math.min(4,state.zoom*Math.exp(-e.deltaY*.001)));schedule();},{passive:false});
   function comparison(){
-   const r=state.result;$('labComparison').hidden=!r;$('labHourEquation').hidden=!r;
+   const r=state.result;$('labComparison').hidden=!r;$('labHourSummary').hidden=!r;
    if(!r)return;
    $('labComparison').innerHTML=stat('原始全年电量',r.baseline_kwh.toFixed(2),'kWh')+stat('修正后全年电量',r.annual_kwh.toFixed(2),'kWh');
    const idx=index(),baseline=state.plan.prediction.values[idx],factor=r.factors[idx];
-   $('labHourEquation').textContent=`${timeLabel()}：${baseline.toFixed(2)} W × ${(factor*100).toFixed(2)}% ≈ ${r.values[idx].toFixed(2)} W`;
+   const hour=Number($('hour').value);
+   $('labHourDate').textContent=`${state.location.year}年${$('month').value}月${$('day').value}日`;
+   $('labHourDate').dateTime=`${state.location.year}-${String($('month').value).padStart(2,'0')}-${String($('day').value).padStart(2,'0')}`;
+   $('labHourRange').textContent=`${String(hour).padStart(2,'0')}:00—${String(hour+1).padStart(2,'0')}:00`;
+   $('labHourBaseline').textContent=baseline.toFixed(2);$('labHourFactor').textContent=(factor*100).toFixed(2);$('labHourCorrected').textContent=r.values[idx].toFixed(2);
   }
   function render(){if(state.step===2)solar();else if(state.step===3)shadow();else comparison();}
   window.addEventListener('resize',schedule);window.addEventListener('unload',stop);

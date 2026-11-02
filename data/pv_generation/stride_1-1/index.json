@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "unit": "Wh",
+  "calendar": "non_leap",
+  "hourly_intervals": 8760,
+  "monthly_hourly_intervals": 288,
+  "angle_grid": {
+    "azimuth_min": 0,
+    "azimuth_max": 359,
+    "azimuth_step": 1,
+    "tilt_min": 0,
+    "tilt_max": 90,
+    "tilt_step": 1
+  },
+  "models": {
+    "LR7-60HVDDF 560M": {
+      "model_id": "LR7-60HVDDF 560M",
+      "manufacturer": "隆基",
+      "power_w": 560.0,
+      "dimensions_mm": [
+        1990.0,
+        1134.0,
+        30.0
+      ],
+      "source_dir": "E:/pv generation data/stride_1-1/560_excel_files",
+      "hourly": "LR7-60HVDDF_560M_560W/hourly.csv",
+      "monthly_hourly": "LR7-60HVDDF_560M_560W/monthly_hourly.csv",
+      "angle_rows": 32760,
+      "hourly_columns": 8762,
+      "monthly_hourly_columns": 290,
+      "row_index": "LR7-60HVDDF_560M_560W/row_index.json",
+      "hourly_bytes": 1096300926,
+      "monthly_hourly_bytes": 85730156,
+      "hourly_sha256": "357fa92189450e3f8950b914a7954b54d90d0aaa973bf8034936d31b85409b03",
+      "monthly_hourly_sha256": "5cc1066151dee46fa467ce2a7edddda6e76c83bfb6527d710c999d2b9b7a4276",
+      "max_month_error_wh": 5.820766091346741e-11,
+      "max_annual_error_wh": 1.1641532182693481e-09
+    },
+    "TSM-NE19R": {
+      "model_id": "TSM-NE19R",
+      "manufacturer": "天合光能",
+      "power_w": 630.0,
+      "dimensions_mm": [
+        2382.0,
+        1134.0,
+        30.0
+      ],
+      "source_dir": "E:/pv generation data/stride_1-1/630_excel_files",
+      "hourly": "TSM-NE19R_630W/hourly.csv",
+      "monthly_hourly": "TSM-NE19R_630W/monthly_hourly.csv",
+      "row_index": "TSM-NE19R_630W/row_index.json",
+      "angle_rows": 32760,
+      "hourly_columns": 8762,
+      "monthly_hourly_columns": 290,
+      "hourly_bytes": 1101745227,
+      "monthly_hourly_bytes": 85688087,
+      "hourly_sha256": "88454c5ca0def6054a93daafd46ce0aa4872166808f07cc6ce3bdc38516571ff",
+      "monthly_hourly_sha256": "8693ebd17a84c134f67fe18e3888212a909d120c1450309de117088ae1839a58",
+      "max_month_error_wh": 5.820766091346741e-11,
+      "max_annual_error_wh": 1.3969838619232178e-09
+    },
+    "S6-505": {
+      "model_id": "S6-505",
+      "manufacturer": "龙焱",
+      "power_w": 505.0,
+      "dimensions_mm": [
+        2300.0,
+        1215.0,
+        5.6
+      ],
+      "source_dir": "E:/pv generation data/stride_1-1/505_excel_files",
+      "hourly": "S6-505_505W/hourly.csv",
+      "monthly_hourly": "S6-505_505W/monthly_hourly.csv",
+      "angle_rows": 32760,
+      "hourly_columns": 8762,
+      "monthly_hourly_columns": 290,
+      "row_index": "S6-505_505W/row_index.json",
+      "hourly_bytes": 1091682141,
+      "monthly_hourly_bytes": 85855947,
+      "hourly_sha256": "14e9fe8831357a0cf2d58e8965ce364fe3854d71c752b11b9455eb60e106d348",
+      "monthly_hourly_sha256": "cfb3d6896df84300cbcf58e24433d62435ea19c48f8505fd1b718cfb4e0d54a4",
+      "max_month_error_wh": 5.820766091346741e-11,
+      "max_annual_error_wh": 1.0477378964424133e-09
+    },
+    "XXGD-S-480": {
+      "model_id": "XXGD-S-480",
+      "manufacturer": "协鑫",
+      "power_w": 480.0,
+      "dimensions_mm": [
+        2405.0,
+        1155.0,
+        35.0
+      ],
+      "source_dir": "E:/pv generation data/stride_1-1/480_excel_files",
+      "hourly": "XXGD-S-480_480W/hourly.csv",
+      "monthly_hourly": "XXGD-S-480_480W/monthly_hourly.csv",
+      "angle_rows": 32760,
+      "hourly_columns": 8762,
+      "monthly_hourly_columns": 290,
+      "row_index": "XXGD-S-480_480W/row_index.json",
+      "hourly_bytes": 1089308926,
+      "monthly_hourly_bytes": 85836710,
+      "hourly_sha256": "2b130ea75ed3167e6297ca4073f2c73803c753e7981673d947aaa0cadc7e8ebf",
+      "monthly_hourly_sha256": "e117c1e42015c4d97179aa971d041e3cee6ff341b8d40d4d0cc86020d679caab",
+      "max_month_error_wh": 4.3655745685100555e-11,
+      "max_annual_error_wh": 1.1641532182693481e-09
+    },
+    "RS-M072BZ": {
+      "model_id": "RS-M072BZ",
+      "manufacturer": "仁烁",
+      "power_w": 140.0,
+      "dimensions_mm": [
+        1200.0,
+        600.0,
+        7.0
+      ],
+      "source_dir": "E:/pv generation data/stride_1-1/140_excel_files",
+      "hourly": "RS-M072BZ_140W/hourly.csv",
+      "monthly_hourly": "RS-M072BZ_140W/monthly_hourly.csv",
+      "angle_rows": 32760,
+      "hourly_columns": 8762,
+      "monthly_hourly_columns": 290,
+      "row_index": "RS-M072BZ_140W/row_index.json",
+      "hourly_bytes": 1023978802,
+      "monthly_hourly_bytes": 85233610,
+      "hourly_sha256": "9bdb1b91ed336d74fe754a4b0d3935128b4ef9426787a6dda7fbcae94e4e2f55",
+      "monthly_hourly_sha256": "e2d5c4226be580856332649f4c880071685c1e22560e092a0baf89b5917a7f15",
+      "max_month_error_wh": 1.0913936421275139e-11,
+      "max_annual_error_wh": 3.4924596548080444e-10
+    }
+  },
+  "losses_included": false,
+  "losses_confirmation": "用户转述CSV交付方：不包含损耗（2026-10-27）",
+  "dc_ac_output_basis": "not_independently_verified"
+}

@@ -4,7 +4,7 @@ $LOAD_PATH.unshift(stdlib, "#{stdlib}/platform_specific")
 require 'json'
 root = File.expand_path('..', __dir__)
 Dir.glob("#{root}/scripts/**/*.rb").each { |file| RubyVM::InstructionSequence.compile_file(file) }
-load "#{root}/scripts/toolbar2/support/array_layout.rb"
+load "#{root}/scripts/support/array_layout.rb"
 def check(condition, message)
   raise message unless condition
 end
@@ -22,12 +22,12 @@ c=Math.cos(Math::PI/4);s=Math.sin(Math::PI/4)
 frames=[flat,[[1.0,0.0,0.0],[0.0,c,s],[0.0,-s,c]],[[1.0,0.0,0.0],[0.0,0.0,1.0],[0.0,-1.0,0.0]]]
 cases=0
 frames.each do |frame|
- (90..270).step(5) do |a|
-  (0..90).step(3) do |b|
+ ((0..345).step(15).to_a+[1,89,91,179,181,269,271,359]).uniq.each do |a|
+  [0,1,2,29,30,31,44,45,46,60,75,89,90].each do |b|
    params=settings.merge('azimuth'=>a,'tilt'=>b)
    p=SuPvArrayLayout.plan(10000.0,8000.0,frame,spec,params)
    # Independently rotate the eight physical box corners with Rx then Rz.
-   theta=(180-a)*Math::PI/180.0;beta=p['settings']['tilt']*Math::PI/180.0
+   theta=(180-p['settings']['azimuth'])*Math::PI/180.0;beta=p['settings']['tilt']*Math::PI/180.0
    co,si,cb,sb=Math.cos(theta),Math.sin(theta),Math.cos(beta),Math.sin(beta)
    corners=[0.0,1134.0].product([0.0,2382.0],[0.0,30.0]).map do |x,y,z|
     ry,rz=cb*y-sb*z,sb*y+cb*z

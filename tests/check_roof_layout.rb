@@ -3,7 +3,7 @@ stdlib='C:/Program Files/SketchUp/SketchUp 2022/Tools/RubyStdLib'
 $LOAD_PATH.unshift(stdlib,"#{stdlib}/platform_specific")
 require 'json'
 root=File.expand_path('..',__dir__)
-load "#{root}/scripts/toolbar2/support/array_layout.rb"
+load "#{root}/scripts/support/array_layout.rb"
 def check(value,message);raise message unless value;end
 # Independent containment oracle: split every panel edge at every roof intersection,
 # check interval midpoints, then test an interior point of each hole.

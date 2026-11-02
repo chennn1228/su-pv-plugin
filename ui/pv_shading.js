@@ -2,6 +2,7 @@
 // Pure numerical experiment; no SketchUp API, mesh entities, network or stored sun tables.
 // NOAA general equations: https://gml.noaa.gov/grad/solcalc/solareqns.PDF
 (function install(root){
+ if(typeof module!=='undefined'&&!root.SuPvSceneShading)require('./pv_scene_shading.js');
  const DEG=Math.PI/180,EPS=1e-8;
  const site=Object.freeze({name:'扬州实验点',latitude:32.4,longitude:119.4,timezone:8,year:2025});
  const dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0);
@@ -23,7 +24,7 @@
   const vector=[-Math.cos(dec)*Math.sin(ha),Math.cos(lat)*Math.sin(dec)-Math.sin(lat)*Math.cos(dec)*Math.cos(ha),Math.sin(lat)*Math.sin(dec)+Math.cos(lat)*Math.cos(dec)*Math.cos(ha)];
   return {azimuth_deg:(Math.atan2(vector[0],vector[1])/DEG+360)%360,elevation_deg:Math.asin(Math.max(-1,Math.min(1,vector[2])))/DEG,vector};
  }
- function geometry(plan){
+ function legacyGeometry(plan){
   const a=plan.settings.azimuth*DEG,b=plan.settings.tilt*DEG;
   const basis=plan.panel_axes||[[-Math.cos(a),Math.sin(a),0],[-Math.cos(b)*Math.sin(a),-Math.cos(b)*Math.cos(a),Math.sin(b)],[Math.sin(b)*Math.sin(a),Math.sin(b)*Math.cos(a),Math.cos(b)]];
   if(!Array.isArray(basis)||basis.length!==3||basis.some(axis=>!Array.isArray(axis)||axis.length!==3||axis.some(x=>!Number.isFinite(x))||Math.abs(dot(axis,axis)-1)>1e-6))throw Error('光伏板方向无效');
@@ -39,6 +40,30 @@
   });
   return {u,v,n,w,l,panels};
  }
+ function geometry(plan){
+  const scene=root.SuPvSceneShading.geometry(plan),first=scene.objects[0];
+  if(!first)return {...legacyGeometry(plan),scene,general:false};
+  const uniform=scene.objects.every(p=>p.w===first.w&&p.l===first.l&&p.axes.flat().every((v,i)=>Math.abs(v-first.axes.flat()[i])<1e-7));
+  let general=!uniform||scene.sources.length!==scene.objects.length||!!(plan.series&&plan.series.length>1);
+  const base=uniform?legacyGeometry(plan):{panels:scene.objects.map(p=>p.origin),u:first.axes[0],v:first.axes[1],n:first.axes[2],w:first.w,l:first.l};
+  if(!general){
+   const bins=new Map(),tol=1e-5;
+   for(const p of base.panels){
+    const bx=Math.floor(p[0]/base.w),by=Math.floor(p[1]/base.l),bz=Math.floor(p[2]/tol);
+    for(let x=-1;x<=1&&!general;x++)for(let y=-1;y<=1&&!general;y++)for(let z=-1;z<=1&&!general;z++){
+     for(const q of bins.get([bx+x,by+y,bz+z].join(','))||[])if(Math.abs(p[2]-q[2])<tol&&Math.abs(p[0]-q[0])<base.w-tol&&Math.abs(p[1]-q[1])<base.l-tol){general=true;break;}
+    }
+    const key=[bx,by,bz].join(',');if(!bins.has(key))bins.set(key,[]);bins.get(key).push(p);if(general)break;
+   }
+  }
+  return {...base,scene,general};
+ }
+ function forSun(g,sun,details=false){
+  if(g.general)return root.SuPvSceneShading.forSun(g.scene,sun,details);
+  const result=parallelForSun(g,sun,details);
+  if(details){result.external=Array.from({length:g.panels.length},()=>[]);result.shadows=result.shadows.map(shadows=>shadows.map(s=>({...s,poly:[[s.rect[0],s.rect[1]],[s.rect[2],s.rect[1]],[s.rect[2],s.rect[3]],[s.rect[0],s.rect[3]]]})));}
+  return result;
+ }
  // Exact union of clipped, axis-aligned shadow rectangles. Overlapping shadows count once.
  function unionArea(rects){
   if(!rects.length)return 0;if(rects.length===1){const r=rects[0];return (r[2]-r[0])*(r[3]-r[1]);}
@@ -51,7 +76,7 @@
   }
   return area;
  }
- function forSun(g,sun,details=false){
+ function parallelForSun(g,sun,details=false){
   const count=g.panels.length,sn=dot(sun,g.n),ratios=details?new Array(count).fill(1):null,shadows=details?Array.from({length:count},()=>[]):null;
   // Mutual-shade-only factor: without front beam, do not remove existing diffuse power.
   if(!count||sun[2]<=EPS||sn<=EPS)return {factor:1,ratios,shadows,front_beam:false};
@@ -114,15 +139,22 @@ function aggregateFactor(g,sun){
   const g=geometry(plan),factors=new Array(8760),values=new Array(8760);let original=0,corrected=0;
   for(let i=0;i<8760;i++){
    const sun=sunAtHour(i,location).vector;
-   const factor=method==='aggregate'?aggregateFactor(g,sun):forSun(g,sun).factor;
-   factors[i]=factor;values[i]=baseline[i]*factor;original+=baseline[i];corrected+=values[i];
+   let factor=1,value=baseline[i];
+   if(baseline[i]>0){
+    if(g.general){
+     const result=forSun(g,sun);
+     value=plan.series?g.scene.objects.reduce((sum,p,k)=>sum+plan.series[p.series_index][i]*result.ratios[k],0):baseline[i]*result.factor;
+     factor=Math.max(0,Math.min(1,value/baseline[i]));
+    }else {factor=method==='aggregate'?aggregateFactor(g,sun):forSun(g,sun).factor;value=baseline[i]*factor;}
+   }
+   factors[i]=factor;values[i]=value;original+=baseline[i];corrected+=value;
    if(i%168===0)progress(Math.floor(i/8760*100));
   }
   return {values,factors,annual_kwh:corrected/1000,peak_wh:Math.max(...values),baseline_kwh:original/1000,loss_pct:original>0?(original-corrected)/original*100:0,site:location,method};
  }
  function workerSource(){
   // Blob worker avoids file:// cross-origin restrictions in HtmlDialog/Chromium.
-  return '('+install.toString()+')(self);self.onmessage='+function(event){
+  return root.SuPvSceneWorkerSource+'('+install.toString()+')(self);self.onmessage='+function(event){
    try{
     const result=self.SuPvShading.annual(event.data.plan,event.data.baseline,percent=>self.postMessage({type:'progress',percent}),event.data.location,event.data.method);
     self.postMessage({type:'result',result});
